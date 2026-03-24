@@ -11,10 +11,4 @@
 			"binding": "LOADER"
 		}
 	],
-	"routes": [
-		{
-		"pattern": "isolate-arcade.ashleypeacock.co.uk",
-		"custom_domain": true
-		},
-	]
 }
