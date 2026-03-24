@@ -3,10 +3,69 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Hello, World!</title>
+		<title>Isolate Arcade</title>
+		<link rel="stylesheet" href="/styles.css" />
 	</head>
 	<body>
-		<h1 id="heading">Hello, World!</h1>
-		<p>This page comes from a static asset stored at `public/index.html` as configured in `wrangler.jsonc`.</p>
+		<div class="app-shell">
+			<header class="topbar">
+				<div>
+					<h1>Isolate Arcade</h1>
+					<p>Three JavaScript-only problems powered by Cloudflare's Dynamic Workers.</p>
+				</div>
+				<label class="problem-picker">
+					<span>Problem</span>
+					<select id="problem-select" aria-label="Choose a problem"></select>
+				</label>
+			</header>
+
+			<main class="workspace">
+				<section class="panel problem-panel">
+					<div class="problem-header">
+						<h2 id="problem-title">Loading...</h2>
+						<span id="problem-difficulty" class="difficulty-badge"></span>
+					</div>
+					<p id="problem-description" class="problem-description"></p>
+
+					<section class="problem-section">
+						<h3>Examples</h3>
+						<div id="problem-examples" class="example-list"></div>
+					</section>
+
+					<section class="problem-section">
+						<h3>Constraints</h3>
+						<ul id="problem-constraints" class="constraints-list"></ul>
+					</section>
+
+					<section class="problem-section">
+						<h3>Validation</h3>
+						<p id="problem-tests" class="muted-text"></p>
+					</section>
+				</section>
+
+				<section class="panel editor-panel">
+					<div class="editor-header">
+						<h2>JavaScript</h2>
+						<button id="run-button" type="button">Run 5 Tests</button>
+					</div>
+
+					<textarea
+						id="code-editor"
+						spellcheck="false"
+						aria-label="JavaScript solution editor"
+					></textarea>
+
+					<section class="results-section">
+						<div class="results-header">
+							<h3>Results</h3>
+							<span id="results-summary" class="muted-text">Choose a problem to begin.</span>
+						</div>
+						<div id="results-output" class="results-output"></div>
+					</section>
+				</section>
+			</main>
+		</div>
+
+		<script type="module" src="/app.js"></script>
 	</body>
 </html>

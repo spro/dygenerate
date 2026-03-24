@@ -1,0 +1,247 @@
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: Arial, sans-serif;
+	background: #f3f4f6;
+	color: #111827;
+}
+
+button,
+select,
+textarea {
+	font: inherit;
+}
+
+.app-shell {
+	min-height: 100vh;
+	padding: 20px;
+}
+
+.topbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: end;
+	gap: 16px;
+	margin-bottom: 20px;
+}
+
+.topbar h1 {
+	margin: 0 0 6px;
+	font-size: 28px;
+}
+
+.topbar p {
+	margin: 0;
+	color: #4b5563;
+}
+
+.problem-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 260px;
+}
+
+.problem-picker select {
+	padding: 10px 12px;
+	border: 1px solid #d1d5db;
+	border-radius: 10px;
+	background: #fff;
+}
+
+.workspace {
+	display: grid;
+	grid-template-columns: minmax(320px, 1fr) minmax(360px, 1fr);
+	gap: 20px;
+}
+
+.panel {
+	background: #fff;
+	border: 1px solid #e5e7eb;
+	border-radius: 16px;
+	padding: 20px;
+	box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+}
+
+.problem-panel,
+.editor-panel {
+	min-height: calc(100vh - 120px);
+}
+
+.problem-header,
+.editor-header,
+.results-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+}
+
+.problem-header h2,
+.editor-header h2,
+.results-header h3 {
+	margin: 0;
+}
+
+.problem-description {
+	line-height: 1.6;
+	color: #1f2937;
+}
+
+.difficulty-badge {
+	padding: 6px 10px;
+	border-radius: 999px;
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.difficulty-easy {
+	background: #dcfce7;
+	color: #166534;
+}
+
+.difficulty-medium {
+	background: #fef3c7;
+	color: #92400e;
+}
+
+.difficulty-hard {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+.problem-section {
+	margin-top: 24px;
+}
+
+.problem-section h3 {
+	margin-bottom: 12px;
+}
+
+.example-list {
+	display: grid;
+	gap: 12px;
+}
+
+.example-card {
+	background: #f9fafb;
+	border: 1px solid #e5e7eb;
+	border-radius: 12px;
+	padding: 12px;
+}
+
+.example-card p {
+	margin: 0;
+	line-height: 1.5;
+}
+
+.constraints-list {
+	margin: 0;
+	padding-left: 18px;
+	color: #374151;
+}
+
+.muted-text {
+	color: #6b7280;
+}
+
+.editor-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+#run-button {
+	border: 0;
+	border-radius: 10px;
+	padding: 10px 14px;
+	background: #2563eb;
+	color: #fff;
+	cursor: pointer;
+	font-weight: 700;
+}
+
+#run-button:disabled {
+	opacity: 0.6;
+	cursor: wait;
+}
+
+#code-editor {
+	width: 100%;
+	flex: 1;
+	min-height: 420px;
+	resize: vertical;
+	border: 1px solid #d1d5db;
+	border-radius: 14px;
+	padding: 16px;
+	background: #111827;
+	color: #f9fafb;
+	line-height: 1.5;
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	font-size: 14px;
+}
+
+.results-section {
+	border-top: 1px solid #e5e7eb;
+	padding-top: 16px;
+}
+
+.results-output {
+	display: grid;
+	gap: 10px;
+	margin-top: 12px;
+}
+
+.result-card {
+	border: 1px solid #e5e7eb;
+	border-radius: 12px;
+	padding: 12px;
+	background: #f9fafb;
+}
+
+.result-card.pass {
+	border-color: #86efac;
+	background: #f0fdf4;
+}
+
+.result-card.fail {
+	border-color: #fca5a5;
+	background: #fef2f2;
+}
+
+.result-card p {
+	margin: 0 0 6px;
+	line-height: 1.45;
+}
+
+.result-card p:last-child {
+	margin-bottom: 0;
+}
+
+.result-label {
+	font-weight: 700;
+}
+
+@media (max-width: 960px) {
+	.topbar,
+	.workspace,
+	.problem-header,
+	.editor-header,
+	.results-header {
+		grid-template-columns: 1fr;
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.problem-panel,
+	.editor-panel {
+		min-height: auto;
+	}
+
+	#code-editor {
+		min-height: 320px;
+	}
+}
