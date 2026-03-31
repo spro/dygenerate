@@ -45,6 +45,9 @@ const EXACT_ROUTES: RouteTable = {
         GET: handleListTools,
         POST: handleSaveTool,
     },
+    "/api/debug/registry": {
+        GET: handleDebugRegistry,
+    },
     "/api/tools/seed": {
         POST: handleSeedTools,
     },
@@ -216,6 +219,29 @@ async function handleClearTools(
 ): Promise<Response> {
     const deletedCount = await getRegistry(env).clearTools()
     return jsonResponse({ deletedCount })
+}
+
+async function handleDebugRegistry(
+    request: Request,
+    env: Env,
+    _ctx: ExecutionContext,
+): Promise<Response> {
+    const url = new URL(request.url)
+    const requestedToolName = url.searchParams.get("name")?.trim() ?? ""
+
+    if (requestedToolName) {
+        const tool = await getToolOrThrow(env, requestedToolName)
+        return jsonResponse({
+            count: 1,
+            tool,
+        })
+    }
+
+    const tools = await getRegistry(env).listStoredTools()
+    return jsonResponse({
+        count: tools.length,
+        tools,
+    })
 }
 
 async function handleGenerateTool(

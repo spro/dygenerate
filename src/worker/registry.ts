@@ -21,6 +21,12 @@ export class ToolRegistry extends DurableObject {
             .sort((left, right) => left.name.localeCompare(right.name))
     }
 
+    async listStoredTools(): Promise<ToolDefinition[]> {
+        return (await this.listToolDefinitions()).sort((left, right) =>
+            left.name.localeCompare(right.name),
+        )
+    }
+
     async getTool(name: string): Promise<ToolDefinition | null> {
         return await this.loadStoredTool(name)
     }
