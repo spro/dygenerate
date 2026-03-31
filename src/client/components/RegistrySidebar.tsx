@@ -37,7 +37,7 @@ export function RegistrySidebar({
                                 className={twMerge(
                                     "flex w-full min-w-0 items-center justify-between gap-3 bg-white px-3 py-2 text-left text-sm transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 active:translate-y-px",
                                     isSelected
-                                        ? "bg-stone-900 text-blue-500"
+                                        ? "bg-stone-200 text-blue-500"
                                         : "text-stone-900 hover:bg-stone-100",
                                 )}
                                 onClick={() => onSelectTool(tool.name)}
