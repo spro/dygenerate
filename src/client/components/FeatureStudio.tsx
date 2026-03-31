@@ -1,23 +1,46 @@
 import { useEffect, useMemo, useState } from "react"
-import { createErrorPanel, fetchJson, jsonRequest } from "../api"
+import { describeError, fetchJson, jsonRequest } from "../api"
 import { useGeneratedAppStore } from "../generatedAppStore"
 import { formatDate, formatJson } from "../tool-utils"
 import type {
     ApplyFeaturePromptResponse,
     FeatureDefinition,
+    FeaturePromptHistoryEntry,
     FeatureRuntimeResponse,
     GenerateFeatureResponse,
-    PanelState,
 } from "../types"
-import { MessageCard, Panel, StatusCard } from "./Panel"
+import {
+    ErrorCard,
+    MessageCard,
+    StatusCard,
+    type FeedbackTone,
+} from "./Feedback"
 import {
     Button,
     Field,
     TextArea,
     TextInput,
     contentCardClass,
-    panelSurfaceClass,
 } from "./Primitives"
+
+type StudioFeedback =
+    | {
+          kind: "message"
+          summary?: string
+          tone?: FeedbackTone
+          message: string
+      }
+    | {
+          kind: "status"
+          summary?: string
+          tone: "pass" | "fail"
+          label: string
+          meta: string
+          sections: string[]
+      }
+    | ({
+          kind: "error"
+      } & ReturnType<typeof describeError>)
 
 export function FeatureStudio() {
     const {
@@ -33,18 +56,18 @@ export function FeatureStudio() {
         removeEntity,
         reset,
     } = useGeneratedAppStore()
-    const [featurePrompt, setFeaturePrompt] = useState("create a todo app")
-    const [followUpPrompt, setFollowUpPrompt] = useState(
-        "set the second todo to done",
-    )
-    const [featurePanel, setFeaturePanel] = useState<PanelState | null>(null)
-    const [followUpPanel, setFollowUpPanel] = useState<PanelState | null>(null)
+    const [featurePrompt, setFeaturePrompt] = useState("")
+    const [followUpPrompt, setFollowUpPrompt] = useState("")
+    const [featureFeedback, setFeatureFeedback] =
+        useState<StudioFeedback | null>(null)
+    const [followUpFeedback, setFollowUpFeedback] =
+        useState<StudioFeedback | null>(null)
     const [isGeneratingFeature, setIsGeneratingFeature] = useState(false)
     const [isApplyingPrompt, setIsApplyingPrompt] = useState(false)
     const [isHydratingRuntime, setIsHydratingRuntime] = useState(true)
-    const [newEntityDraft, setNewEntityDraft] = useState<Record<string, string>>(
-        {},
-    )
+    const [newEntityDraft, setNewEntityDraft] = useState<
+        Record<string, string>
+    >({})
 
     const sortedFields = useMemo(
         () =>
@@ -54,6 +77,11 @@ export function FeatureStudio() {
                   )
                 : [],
         [feature],
+    )
+
+    const orderedPromptHistory = useMemo(
+        () => [...promptHistory].reverse(),
+        [promptHistory],
     )
 
     useEffect(() => {
@@ -68,12 +96,18 @@ export function FeatureStudio() {
             )
             hydrateRuntime(result.runtime)
             if (result.runtime?.feature) {
-                setNewEntityDraft(buildInitialEntityDraft(result.runtime.feature))
+                setNewEntityDraft(
+                    buildInitialEntityDraft(result.runtime.feature),
+                )
             }
         } catch (error) {
-            setFeaturePanel(
-                createErrorPanel(error, "Unable to load persisted feature runtime."),
-            )
+            setFeatureFeedback({
+                kind: "error",
+                ...describeError(
+                    error,
+                    "Unable to load persisted feature runtime.",
+                ),
+            })
         } finally {
             setIsHydratingRuntime(false)
         }
@@ -103,7 +137,7 @@ export function FeatureStudio() {
     async function handleGenerateFeature(): Promise<void> {
         const description = featurePrompt.trim()
         if (!description) {
-            setFeaturePanel({
+            setFeatureFeedback({
                 kind: "message",
                 tone: "fail",
                 message: "Describe the app or feature you want to create.",
@@ -112,9 +146,11 @@ export function FeatureStudio() {
         }
 
         setIsGeneratingFeature(true)
-        setFeaturePanel({
+        setFeatureFeedback({
             kind: "message",
-            message: "Workers AI is planning the shared model, actions, and views...",
+            tone: "warn",
+            message:
+                "Workers AI is planning the shared model, actions, and views...",
         })
 
         try {
@@ -124,16 +160,17 @@ export function FeatureStudio() {
             )
             setFeature(result.feature)
             await persistRuntime()
-            setFeaturePanel({
+            setFeatureFeedback({
                 kind: "message",
                 tone: "pass",
                 summary: result.feature.name,
                 message: `Generated ${result.feature.collectionName} with ${Object.keys(result.feature.fields).length} fields and ${result.feature.actions.length} actions.`,
             })
-            setFollowUpPanel(null)
+            setFeaturePrompt("")
+            setFollowUpFeedback(null)
             setNewEntityDraft(buildInitialEntityDraft(result.feature))
         } catch (error) {
-            setFeaturePanel(createErrorPanel(error))
+            setFeatureFeedback({ kind: "error", ...describeError(error) })
         } finally {
             setIsGeneratingFeature(false)
         }
@@ -141,7 +178,7 @@ export function FeatureStudio() {
 
     async function handleApplyPrompt(): Promise<void> {
         if (!feature) {
-            setFollowUpPanel({
+            setFollowUpFeedback({
                 kind: "message",
                 tone: "fail",
                 message: "Generate a feature first.",
@@ -151,7 +188,7 @@ export function FeatureStudio() {
 
         const prompt = followUpPrompt.trim()
         if (!prompt) {
-            setFollowUpPanel({
+            setFollowUpFeedback({
                 kind: "message",
                 tone: "fail",
                 message: "Describe the state change you want to make.",
@@ -160,8 +197,9 @@ export function FeatureStudio() {
         }
 
         setIsApplyingPrompt(true)
-        setFollowUpPanel({
+        setFollowUpFeedback({
             kind: "message",
+            tone: "warn",
             message: "Interpreting your prompt into app state patches...",
         })
 
@@ -176,15 +214,10 @@ export function FeatureStudio() {
             )
             applyPatches(result.patches, result.summary, prompt)
             await persistRuntime()
-            setFollowUpPanel({
-                kind: "status",
-                tone: "pass",
-                label: "Applied",
-                meta: `${result.patches.length} patch${result.patches.length === 1 ? "" : "es"}`,
-                sections: [result.summary, formatJson(result.patches)],
-            })
+            setFollowUpPrompt("")
+            setFollowUpFeedback(null)
         } catch (error) {
-            setFollowUpPanel(createErrorPanel(error))
+            setFollowUpFeedback({ kind: "error", ...describeError(error) })
         } finally {
             setIsApplyingPrompt(false)
         }
@@ -199,7 +232,7 @@ export function FeatureStudio() {
         createEntity(entity)
         await persistRuntime()
         setNewEntityDraft(buildInitialEntityDraft(feature))
-        setFollowUpPanel({
+        setFollowUpFeedback({
             kind: "message",
             tone: "pass",
             summary: "State updated.",
@@ -209,19 +242,26 @@ export function FeatureStudio() {
 
     async function handleResetRuntime(): Promise<void> {
         reset()
+        setFeaturePrompt("")
+        setFollowUpPrompt("")
         setNewEntityDraft({})
-        setFollowUpPanel(null)
+        setFollowUpFeedback(null)
         try {
             await clearPersistedRuntime()
-            setFeaturePanel({
+            setFeatureFeedback({
                 kind: "message",
                 tone: "pass",
-                message: "Cleared the persisted feature runtime and reset the local Zustand store.",
+                message:
+                    "Cleared the persisted feature runtime and reset the local Zustand store.",
             })
         } catch (error) {
-            setFeaturePanel(
-                createErrorPanel(error, "Unable to clear persisted feature runtime."),
-            )
+            setFeatureFeedback({
+                kind: "error",
+                ...describeError(
+                    error,
+                    "Unable to clear persisted feature runtime.",
+                ),
+            })
         }
     }
 
@@ -248,7 +288,7 @@ export function FeatureStudio() {
     }
 
     return (
-        <section className={panelSurfaceClass}>
+        <section className="flex min-w-0 flex-col bg-white">
             <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_380px]">
                 <div className="grid min-w-0 gap-4">
                     <div className={contentCardClass}>
@@ -258,7 +298,8 @@ export function FeatureStudio() {
                                     Live app runtime
                                 </div>
                                 <div className="text-sm text-stone-500">
-                                    Trusted rendering of generated feature definitions.
+                                    Trusted rendering of generated feature
+                                    definitions.
                                 </div>
                             </div>
                             <div className="text-sm text-stone-500">
@@ -295,7 +336,11 @@ export function FeatureStudio() {
                                     void handleRemoveEntity(index)
                                 }
                                 onUpdateEntityField={(index, field, value) =>
-                                    void handleUpdateEntityField(index, field, value)
+                                    void handleUpdateEntityField(
+                                        index,
+                                        field,
+                                        value,
+                                    )
                                 }
                             />
                         )}
@@ -346,19 +391,22 @@ export function FeatureStudio() {
                                         Fields
                                     </div>
                                     <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                                        {sortedFields.map(([fieldName, field]) => (
-                                            <div
-                                                key={fieldName}
-                                                className="border border-stone-300 bg-stone-50 p-2 text-sm"
-                                            >
-                                                <div className="font-medium text-stone-900">
-                                                    {field.label} · {field.type}
+                                        {sortedFields.map(
+                                            ([fieldName, field]) => (
+                                                <div
+                                                    key={fieldName}
+                                                    className="border border-stone-300 bg-stone-50 p-2 text-sm"
+                                                >
+                                                    <div className="font-medium text-stone-900">
+                                                        {field.label} ·{" "}
+                                                        {field.type}
+                                                    </div>
+                                                    <div className="text-stone-500">
+                                                        {field.description}
+                                                    </div>
                                                 </div>
-                                                <div className="text-stone-500">
-                                                    {field.description}
-                                                </div>
-                                            </div>
-                                        ))}
+                                            ),
+                                        )}
                                     </div>
                                 </div>
                             </>
@@ -368,15 +416,6 @@ export function FeatureStudio() {
 
                 <aside className="grid gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:self-start xl:overflow-y-auto">
                     <div className={contentCardClass}>
-                        <div>
-                            <div className="text-sm font-medium text-stone-900">
-                                Chat
-                            </div>
-                            <div className="mt-1 text-sm text-stone-500">
-                                Kept visible on the right so you can keep prompting while inspecting the generated app.
-                            </div>
-                        </div>
-
                         <Field
                             className="mt-4"
                             label="App prompt"
@@ -386,6 +425,7 @@ export function FeatureStudio() {
                                 rows={6}
                                 className="min-h-36 resize-y"
                                 value={featurePrompt}
+                                placeholder="Create a todo app"
                                 onChange={(event) =>
                                     setFeaturePrompt(event.target.value)
                                 }
@@ -396,9 +436,11 @@ export function FeatureStudio() {
                             <Button
                                 variant="subtle"
                                 onClick={() => void handleResetRuntime()}
-                                disabled={isGeneratingFeature || isHydratingRuntime}
+                                disabled={
+                                    isGeneratingFeature || isHydratingRuntime
+                                }
                             >
-                                Reset runtime
+                                Clear all
                             </Button>
                             <Button
                                 variant="primary"
@@ -412,15 +454,65 @@ export function FeatureStudio() {
                         </div>
                     </div>
 
+                    {featureFeedback ? (
+                        <div className={contentCardClass}>
+                            <div className="text-sm font-medium text-stone-900">
+                                Generation status
+                            </div>
+                            {featureFeedback.summary ? (
+                                <div className="mt-1 text-sm text-stone-500">
+                                    {featureFeedback.summary}
+                                </div>
+                            ) : null}
+                            <div className="mt-3">
+                                {renderFeedback(featureFeedback)}
+                            </div>
+                        </div>
+                    ) : null}
+
                     <div className={contentCardClass}>
+                        <div className="text-sm font-medium text-stone-900">
+                            Follow-up chat
+                        </div>
+
+                        <div className="mt-4 grid max-h-[32rem] gap-3 overflow-y-auto pr-1">
+                            {!feature ? (
+                                <MessageCard message="Generate a feature to start the chat loop." />
+                            ) : (
+                                <>
+                                    {orderedPromptHistory.length === 0 &&
+                                    !followUpFeedback ? (
+                                        <MessageCard message="No follow-up prompts applied yet." />
+                                    ) : null}
+
+                                    {orderedPromptHistory.map(
+                                        (entry, index) => (
+                                            <FollowUpExchange
+                                                key={`${entry.at}-${index}`}
+                                                entry={entry}
+                                            />
+                                        ),
+                                    )}
+
+                                    {followUpFeedback ? (
+                                        <FollowUpActivity
+                                            feedback={followUpFeedback}
+                                        />
+                                    ) : null}
+                                </>
+                            )}
+                        </div>
+
                         <Field
-                            label="Follow-up prompt"
+                            className="mt-4"
+                            label="Your next prompt"
                             hint="Example: set the second todo to done"
                         >
                             <TextArea
                                 rows={5}
                                 className="min-h-28 resize-y"
                                 value={followUpPrompt}
+                                placeholder="Set the second todo to done"
                                 onChange={(event) =>
                                     setFollowUpPrompt(event.target.value)
                                 }
@@ -439,66 +531,119 @@ export function FeatureStudio() {
                             </Button>
                         </div>
                     </div>
-
-                    {featurePanel ? (
-                        <div className={contentCardClass}>
-                            <div className="text-sm font-medium text-stone-900">
-                                Generation status
-                            </div>
-                            {featurePanel.summary ? (
-                                <div className="mt-1 text-sm text-stone-500">
-                                    {featurePanel.summary}
-                                </div>
-                            ) : null}
-                            <Panel panel={featurePanel} />
-                        </div>
-                    ) : null}
-
-                    {followUpPanel ? (
-                        <div className={contentCardClass}>
-                            <div className="text-sm font-medium text-stone-900">
-                                Prompt status
-                            </div>
-                            {followUpPanel.summary ? (
-                                <div className="mt-1 text-sm text-stone-500">
-                                    {followUpPanel.summary}
-                                </div>
-                            ) : null}
-                            <Panel panel={followUpPanel} />
-                        </div>
-                    ) : null}
-
-                    <div className={contentCardClass}>
-                        <div className="text-sm font-medium text-stone-900">
-                            Prompt history
-                        </div>
-                        <div className="mt-1 text-sm text-stone-500">
-                            Follow-up prompts stay visible here while you explore the runtime.
-                        </div>
-                        <div className="mt-3 grid gap-2">
-                            {!feature ? (
-                                <MessageCard message="Generate a feature to start the chat loop." />
-                            ) : promptHistory.length === 0 ? (
-                                <MessageCard message="No follow-up prompts applied yet." />
-                            ) : (
-                                promptHistory.map((entry, index) => (
-                                    <StatusCard
-                                        key={`${entry.at}-${index}`}
-                                        tone="pass"
-                                        label={entry.prompt}
-                                        meta={formatDate(entry.at)}
-                                        sections={[
-                                            entry.summary,
-                                            formatJson(entry.appliedPatches),
-                                        ]}
-                                    />
-                                ))
-                            )}
-                        </div>
-                    </div>
                 </aside>
             </div>
         </section>
+    )
+}
+
+function renderFeedback(feedback: StudioFeedback) {
+    if (feedback.kind === "message") {
+        return <MessageCard message={feedback.message} tone={feedback.tone} />
+    }
+
+    if (feedback.kind === "status") {
+        return (
+            <StatusCard
+                tone={feedback.tone}
+                label={feedback.label}
+                meta={feedback.meta}
+                sections={feedback.sections}
+            />
+        )
+    }
+
+    return (
+        <ErrorCard
+            message={feedback.message}
+            prominentSections={feedback.prominentSections}
+            details={feedback.details}
+        />
+    )
+}
+
+function FollowUpExchange({ entry }: { entry: FeaturePromptHistoryEntry }) {
+    return (
+        <div className="grid gap-2">
+            <div className="flex justify-end">
+                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-stone-900 px-4 py-3 text-sm text-white">
+                    <div className="whitespace-pre-wrap break-words leading-6">
+                        {entry.prompt}
+                    </div>
+                    <div className="mt-2 text-xs text-stone-300">
+                        {formatDate(entry.at)}
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex justify-start">
+                <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-stone-300 bg-stone-50 p-3 text-sm text-stone-800">
+                    <div className="whitespace-pre-wrap break-words leading-6">
+                        {entry.summary}
+                    </div>
+                    <details className="mt-3">
+                        <summary className="cursor-pointer font-medium text-stone-700">
+                            Generated patch JSON
+                        </summary>
+                        <pre className="mt-2 overflow-auto whitespace-pre-wrap break-words border border-stone-300 bg-white p-3 font-mono text-sm leading-6 text-zinc-900">
+                            {formatJson(entry.appliedPatches)}
+                        </pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function FollowUpActivity({ feedback }: { feedback: StudioFeedback }) {
+    if (feedback.kind === "error") {
+        return (
+            <div className="flex justify-start">
+                <div className="max-w-[92%]">
+                    <ErrorCard
+                        message={feedback.message}
+                        prominentSections={feedback.prominentSections}
+                        details={feedback.details}
+                    />
+                </div>
+            </div>
+        )
+    }
+
+    if (feedback.kind === "status") {
+        return (
+            <div className="flex justify-start">
+                <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950">
+                    <div className="flex items-center justify-between gap-3 font-medium text-emerald-700">
+                        <span>{feedback.label}</span>
+                        <span className="text-xs">{feedback.meta}</span>
+                    </div>
+                    {feedback.sections[0] ? (
+                        <div className="mt-2 whitespace-pre-wrap break-words leading-6">
+                            {feedback.sections[0]}
+                        </div>
+                    ) : null}
+                    {feedback.sections[1] ? (
+                        <details className="mt-3">
+                            <summary className="cursor-pointer font-medium text-emerald-800">
+                                Generated patch JSON
+                            </summary>
+                            <pre className="mt-2 overflow-auto whitespace-pre-wrap break-words border border-emerald-200 bg-white p-3 font-mono text-sm leading-6 text-zinc-900">
+                                {feedback.sections[1]}
+                            </pre>
+                        </details>
+                    ) : null}
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex justify-start">
+            <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-stone-300 bg-stone-50 p-3 text-sm leading-6 text-stone-800">
+                {feedback.message}
+            </div>
+        </div>
     )
 }
 
@@ -532,35 +677,49 @@ function FeatureRuntimePreview({
                     Create {feature.entityName}
                 </div>
                 <div className="mt-3 grid gap-3">
-                    {Object.entries(feature.fields).map(([fieldName, field]) => (
-                        <Field
-                            key={fieldName}
-                            label={field.label}
-                            hint={field.description}
-                        >
-                            {field.type === "boolean" ? (
-                                <select
-                                    className="w-full border border-stone-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-stone-500 focus:ring-1 focus:ring-stone-400"
-                                    value={newEntityDraft[fieldName] ?? "false"}
-                                    onChange={(event) =>
-                                        onDraftChange(fieldName, event.target.value)
-                                    }
-                                >
-                                    <option value="false">false</option>
-                                    <option value="true">true</option>
-                                </select>
-                            ) : (
-                                <TextInput
-                                    type={field.type === "number" ? "number" : "text"}
-                                    value={newEntityDraft[fieldName] ?? ""}
-                                    placeholder={field.label}
-                                    onChange={(event) =>
-                                        onDraftChange(fieldName, event.target.value)
-                                    }
-                                />
-                            )}
-                        </Field>
-                    ))}
+                    {Object.entries(feature.fields).map(
+                        ([fieldName, field]) => (
+                            <Field
+                                key={fieldName}
+                                label={field.label}
+                                hint={field.description}
+                            >
+                                {field.type === "boolean" ? (
+                                    <select
+                                        className="w-full border border-stone-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-stone-500 focus:ring-1 focus:ring-stone-400"
+                                        value={
+                                            newEntityDraft[fieldName] ?? "false"
+                                        }
+                                        onChange={(event) =>
+                                            onDraftChange(
+                                                fieldName,
+                                                event.target.value,
+                                            )
+                                        }
+                                    >
+                                        <option value="false">false</option>
+                                        <option value="true">true</option>
+                                    </select>
+                                ) : (
+                                    <TextInput
+                                        type={
+                                            field.type === "number"
+                                                ? "number"
+                                                : "text"
+                                        }
+                                        value={newEntityDraft[fieldName] ?? ""}
+                                        placeholder={field.label}
+                                        onChange={(event) =>
+                                            onDraftChange(
+                                                fieldName,
+                                                event.target.value,
+                                            )
+                                        }
+                                    />
+                                )}
+                            </Field>
+                        ),
+                    )}
                 </div>
                 <div className="mt-4 flex justify-end">
                     <Button variant="primary" onClick={onCreateEntity}>
@@ -575,9 +734,6 @@ function FeatureRuntimePreview({
                         <div className="text-sm font-medium text-stone-900">
                             {feature.collectionName}
                         </div>
-                        <div className="text-sm text-stone-500">
-                            Live state from the Zustand runtime.
-                        </div>
                     </div>
                     <div className="text-sm text-stone-500">
                         {entities.length} item{entities.length === 1 ? "" : "s"}
@@ -586,7 +742,9 @@ function FeatureRuntimePreview({
 
                 <div className="mt-4 grid gap-3">
                     {entities.length === 0 ? (
-                        <MessageCard message={`No ${feature.collectionName} yet.`} />
+                        <MessageCard
+                            message={`No ${feature.collectionName} yet.`}
+                        />
                     ) : (
                         entities.map((entity, index) => {
                             const primaryValue = entity[feature.primaryField]
@@ -599,31 +757,46 @@ function FeatureRuntimePreview({
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
                                             <div className="font-medium text-stone-900">
-                                                {String(primaryValue ?? `${feature.entityName} ${index + 1}`)}
+                                                {String(
+                                                    primaryValue ??
+                                                        `${feature.entityName} ${index + 1}`,
+                                                )}
                                             </div>
                                             {feature.statusField ? (
                                                 <div className="mt-1 text-sm text-stone-500">
-                                                    {feature.statusField}: {String(entity[feature.statusField])}
+                                                    {feature.statusField}:{" "}
+                                                    {String(
+                                                        entity[
+                                                            feature.statusField
+                                                        ],
+                                                    )}
                                                 </div>
                                             ) : null}
                                         </div>
                                         <div className="flex gap-2">
-                                            {booleanFields.map(([fieldName, field]) => (
-                                                <Button
-                                                    key={fieldName}
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        onToggleEntityField(index, fieldName)
-                                                    }
-                                                >
-                                                    {field.label}
-                                                </Button>
-                                            ))}
+                                            {booleanFields.map(
+                                                ([fieldName, field]) => (
+                                                    <Button
+                                                        key={fieldName}
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            onToggleEntityField(
+                                                                index,
+                                                                fieldName,
+                                                            )
+                                                        }
+                                                    >
+                                                        {field.label}
+                                                    </Button>
+                                                ),
+                                            )}
                                             <Button
                                                 variant="danger"
                                                 size="sm"
-                                                onClick={() => onRemoveEntity(index)}
+                                                onClick={() =>
+                                                    onRemoveEntity(index)
+                                                }
                                             >
                                                 Delete
                                             </Button>
@@ -638,30 +811,45 @@ function FeatureRuntimePreview({
                                                     label={field.label}
                                                     hint={field.type}
                                                 >
-                                                    {field.type === "boolean" ? (
+                                                    {field.type ===
+                                                    "boolean" ? (
                                                         <select
                                                             className="w-full border border-stone-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-stone-500 focus:ring-1 focus:ring-stone-400"
-                                                            value={String(entity[fieldName] ?? false)}
+                                                            value={String(
+                                                                entity[
+                                                                    fieldName
+                                                                ] ?? false,
+                                                            )}
                                                             onChange={(event) =>
                                                                 onUpdateEntityField(
                                                                     index,
                                                                     fieldName,
-                                                                    event.target.value ===
+                                                                    event.target
+                                                                        .value ===
                                                                         "true",
                                                                 )
                                                             }
                                                         >
-                                                            <option value="true">true</option>
-                                                            <option value="false">false</option>
+                                                            <option value="true">
+                                                                true
+                                                            </option>
+                                                            <option value="false">
+                                                                false
+                                                            </option>
                                                         </select>
                                                     ) : (
                                                         <TextInput
                                                             type={
-                                                                field.type === "number"
+                                                                field.type ===
+                                                                "number"
                                                                     ? "number"
                                                                     : "text"
                                                             }
-                                                            value={String(entity[fieldName] ?? "")}
+                                                            value={String(
+                                                                entity[
+                                                                    fieldName
+                                                                ] ?? "",
+                                                            )}
                                                             onChange={(event) =>
                                                                 onUpdateEntityField(
                                                                     index,
@@ -694,7 +882,9 @@ function FeatureRuntimePreview({
     )
 }
 
-function buildInitialEntityDraft(feature: FeatureDefinition): Record<string, string> {
+function buildInitialEntityDraft(
+    feature: FeatureDefinition,
+): Record<string, string> {
     const next: Record<string, string> = {}
 
     for (const [fieldName, field] of Object.entries(feature.fields)) {
@@ -725,6 +915,7 @@ function materializeEntity(
         return entity
     }
 
-    entity[feature.primaryField] = `${feature.entityName} ${Math.random().toString(36).slice(2, 7)}`
+    entity[feature.primaryField] =
+        `${feature.entityName} ${Math.random().toString(36).slice(2, 7)}`
     return entity
 }

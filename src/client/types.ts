@@ -95,31 +95,6 @@ export interface ErrorSection {
     content: string
 }
 
-export type PanelTone = "neutral" | "pass" | "fail"
-
-export type PanelState =
-    | {
-          kind: "message"
-          summary?: string
-          tone?: PanelTone
-          message: string
-      }
-    | {
-          kind: "status"
-          summary?: string
-          tone: Exclude<PanelTone, "neutral">
-          label: string
-          meta: string
-          sections: string[]
-      }
-    | {
-          kind: "error"
-          summary?: string
-          message: string
-          prominentSections: ErrorSection[]
-          details?: string
-      }
-
 export interface ApiErrorPayload {
     error?: string
     details?: {

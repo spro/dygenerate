@@ -6,8 +6,6 @@ import type {
 } from "react"
 import { twMerge } from "tailwind-merge"
 
-export const panelSurfaceClass = "flex min-w-0 flex-col bg-white"
-
 export const contentCardClass =
     "flex flex-col border border-stone-300 bg-white p-3"
 

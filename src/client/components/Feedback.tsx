@@ -1,35 +1,15 @@
+import { useState } from "react"
 import { twMerge } from "tailwind-merge"
-import type { ErrorSection, PanelState, PanelTone } from "../types"
+import type { ErrorSection } from "../types"
 
-export function Panel({ panel }: { panel: PanelState }) {
-    return (
-        <div className="mt-3 grid gap-2">
-            {panel.kind === "message" ? (
-                <MessageCard message={panel.message} tone={panel.tone} />
-            ) : panel.kind === "status" ? (
-                <StatusCard
-                    tone={panel.tone}
-                    label={panel.label}
-                    meta={panel.meta}
-                    sections={panel.sections}
-                />
-            ) : (
-                <ErrorCard
-                    message={panel.message}
-                    prominentSections={panel.prominentSections}
-                    details={panel.details}
-                />
-            )}
-        </div>
-    )
-}
+export type FeedbackTone = "neutral" | "pass" | "fail" | "warn"
 
 export function MessageCard({
     message,
     tone = "neutral",
 }: {
     message: string
-    tone?: PanelTone
+    tone?: FeedbackTone
 }) {
     return (
         <div className={twMerge(cardBaseClass, toneCardClass(tone))}>
@@ -81,9 +61,45 @@ export function ErrorCard({
     prominentSections: ErrorSection[]
     details?: string
 }) {
+    const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+        "idle",
+    )
+
+    async function handleCopy(): Promise<void> {
+        if (!navigator.clipboard?.writeText) {
+            setCopyState("failed")
+            window.setTimeout(() => setCopyState("idle"), 2000)
+            return
+        }
+
+        try {
+            await navigator.clipboard.writeText(
+                buildErrorClipboardText(message, prominentSections, details),
+            )
+            setCopyState("copied")
+        } catch {
+            setCopyState("failed")
+        }
+
+        window.setTimeout(() => setCopyState("idle"), 2000)
+    }
+
     return (
         <div className={twMerge(cardBaseClass, toneCardClass("fail"))}>
-            <p className="m-0">{message}</p>
+            <div className="flex items-start justify-between gap-3">
+                <p className="m-0 flex-1">{message}</p>
+                <button
+                    type="button"
+                    className="shrink-0 border border-red-300 bg-white px-2 py-1 text-xs font-medium text-red-700 transition hover:bg-red-100"
+                    onClick={() => void handleCopy()}
+                >
+                    {copyState === "copied"
+                        ? "Copied"
+                        : copyState === "failed"
+                          ? "Copy failed"
+                          : "Copy error"}
+                </button>
+            </div>
             {prominentSections.map((section) => (
                 <div
                     key={section.label}
@@ -111,16 +127,38 @@ export function ErrorCard({
     )
 }
 
+function buildErrorClipboardText(
+    message: string,
+    prominentSections: ErrorSection[],
+    details?: string,
+): string {
+    const parts = [`Error\n${message}`]
+
+    for (const section of prominentSections) {
+        parts.push(`${section.label}\n${section.content}`)
+    }
+
+    if (details) {
+        parts.push(`Debug details\n${details}`)
+    }
+
+    return parts.join("\n\n")
+}
+
 const cardBaseClass =
     "border p-3 text-sm leading-6 text-zinc-800 whitespace-pre-wrap break-words"
 
-function toneCardClass(tone: PanelTone): string {
+function toneCardClass(tone: FeedbackTone): string {
     if (tone === "pass") {
         return "border-emerald-300 bg-emerald-50"
     }
 
     if (tone === "fail") {
         return "border-red-300 bg-red-50"
+    }
+
+    if (tone === "warn") {
+        return "border-amber-300 bg-amber-50"
     }
 
     return "border-stone-300 bg-white"
