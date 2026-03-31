@@ -1,4 +1,8 @@
-import type { ApiErrorPayload, ErrorSection, PanelState } from "./types"
+import {
+    EXPERIENCE_ID_HEADER,
+    getOrCreateExperienceId,
+} from "../shared/experience"
+import type { ApiErrorPayload, ErrorSection } from "./types"
 
 export class ApiError extends Error {
     readonly status: number
@@ -16,7 +20,7 @@ export async function fetchJson<T>(
     url: string,
     options?: RequestInit,
 ): Promise<T> {
-    const response = await fetch(url, options)
+    const response = await fetch(url, withExperienceHeaders(options))
     const rawText = await response.text()
     let payload: ApiErrorPayload = {}
 
@@ -51,15 +55,25 @@ export async function fetchJson<T>(
 
 export function jsonRequest(method: string, body?: unknown): RequestInit {
     if (body === undefined) {
-        return { method }
+        return withExperienceHeaders({ method })
     }
 
-    return {
+    return withExperienceHeaders({
         method,
         headers: {
             "content-type": "application/json",
         },
         body: JSON.stringify(body),
+    })
+}
+
+function withExperienceHeaders(options?: RequestInit): RequestInit {
+    const headers = new Headers(options?.headers)
+    headers.set(EXPERIENCE_ID_HEADER, getOrCreateExperienceId())
+
+    return {
+        ...options,
+        headers,
     }
 }
 
@@ -70,7 +84,14 @@ const ERROR_SECTION_CONFIG = [
     { key: "inputPreview", label: "Run input preview" },
 ] as const
 
-export function createErrorPanel(error: unknown, summary?: string): PanelState {
+export interface ErrorDetails {
+    summary: string
+    message: string
+    prominentSections: ErrorSection[]
+    details?: string
+}
+
+export function describeError(error: unknown, summary?: string): ErrorDetails {
     const defaultSummary =
         error instanceof ApiError
             ? `Request failed (HTTP ${error.status}).`
@@ -78,7 +99,6 @@ export function createErrorPanel(error: unknown, summary?: string): PanelState {
     const message = error instanceof Error ? error.message : "Unexpected error."
 
     return {
-        kind: "error",
         summary: summary ?? defaultSummary,
         message,
         prominentSections: extractProminentErrorSections(error),

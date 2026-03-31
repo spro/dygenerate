@@ -1,8 +1,8 @@
 import { DurableObject } from "cloudflare:workers"
 
+import { buildRegistryObjectName } from "../shared/experience"
 import {
     FEATURE_RUNTIME_KEY,
-    REGISTRY_OBJECT_NAME,
     SEEDED_TOOLS,
     TOOL_KEY_PREFIX,
 } from "./constants"
@@ -145,15 +145,16 @@ export class ToolRegistry extends DurableObject {
     }
 }
 
-export function getRegistry(env: Env) {
-    return env.TOOL_REGISTRY.getByName(REGISTRY_OBJECT_NAME)
+export function getRegistry(env: Env, experienceId?: string) {
+    return env.TOOL_REGISTRY.getByName(buildRegistryObjectName(experienceId))
 }
 
 export async function getToolOrThrow(
     env: Env,
     name: string,
+    experienceId?: string,
 ): Promise<ToolDefinition> {
-    const tool = await getRegistry(env).getTool(name)
+    const tool = await getRegistry(env, experienceId).getTool(name)
     if (!tool) {
         throw new HttpError(404, `Tool "${name}" was not found.`)
     }

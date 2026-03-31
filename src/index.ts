@@ -1,6 +1,10 @@
 import { WorkerEntrypoint } from "cloudflare:workers"
 
 import {
+    EXPERIENCE_ID_HEADER,
+    resolveExperienceId,
+} from "./shared/experience"
+import {
     generateComponentDefinition,
     generateFeatureDefinition,
     generateFeaturePatches,
@@ -34,6 +38,7 @@ export { ToolRegistry }
 interface ToolExecutorProps {
     depth: number
     stack: string[]
+    experienceId: string
 }
 
 type RouteHandler = (
@@ -98,7 +103,8 @@ export class ToolExecutor extends WorkerEntrypoint<Env, ToolExecutorProps> {
     }
 
     async callTool(name: string, input: unknown): Promise<unknown> {
-        const tool = await getToolOrThrow(this.env, name)
+        const experienceId = resolveExperienceId(this.ctx.props.experienceId)
+        const tool = await getToolOrThrow(this.env, name, experienceId)
         const currentDepth = normalizeToolCallDepth(this.ctx.props.depth)
         const currentStack = normalizeToolCallStack(this.ctx.props.stack)
 
@@ -130,6 +136,7 @@ export class ToolExecutor extends WorkerEntrypoint<Env, ToolExecutorProps> {
             props: {
                 depth: nextDepth,
                 stack: [...currentStack, tool.name],
+                experienceId,
             },
         })
         const { output } = await runToolInSandbox(this.env, tool, input, {
@@ -188,21 +195,21 @@ function decodeNamedTool(pathname: string): string {
 }
 
 async function handleListTools(
-    _request: Request,
+    request: Request,
     env: Env,
     _ctx: ExecutionContext,
 ): Promise<Response> {
-    const tools = await getRegistry(env).listTools()
+    const tools = await getRequestRegistry(request, env).listTools()
     return jsonResponse({ tools })
 }
 
 async function handleGetTool(
-    _request: Request,
+    request: Request,
     env: Env,
     _ctx: ExecutionContext,
     name: string,
 ): Promise<Response> {
-    const tool = await getToolOrThrow(env, name)
+    const tool = await getToolOrThrow(env, name, getRequestExperienceId(request))
     return jsonResponse({ tool })
 }
 
@@ -212,17 +219,17 @@ async function handleSaveTool(
     _ctx: ExecutionContext,
 ): Promise<Response> {
     const body = await readJson<RequestPayload>(request)
-    const tool = await getRegistry(env).saveTool(body)
+    const tool = await getRequestRegistry(request, env).saveTool(body)
     return jsonResponse({ tool, summary: toToolSummary(tool) })
 }
 
 async function handleDeleteTool(
-    _request: Request,
+    request: Request,
     env: Env,
     _ctx: ExecutionContext,
     name: string,
 ): Promise<Response> {
-    const deleted = await getRegistry(env).deleteTool(name)
+    const deleted = await getRequestRegistry(request, env).deleteTool(name)
     if (!deleted) {
         throw new HttpError(404, `Tool "${name}" was not found.`)
     }
@@ -230,19 +237,19 @@ async function handleDeleteTool(
 }
 
 async function handleSeedTools(
-    _request: Request,
+    request: Request,
     env: Env,
     _ctx: ExecutionContext,
 ): Promise<Response> {
-    return jsonResponse(await getRegistry(env).seedTools())
+    return jsonResponse(await getRequestRegistry(request, env).seedTools())
 }
 
 async function handleClearTools(
-    _request: Request,
+    request: Request,
     env: Env,
     _ctx: ExecutionContext,
 ): Promise<Response> {
-    const deletedCount = await getRegistry(env).clearTools()
+    const deletedCount = await getRequestRegistry(request, env).clearTools()
     return jsonResponse({ deletedCount })
 }
 
@@ -255,14 +262,18 @@ async function handleDebugRegistry(
     const requestedToolName = url.searchParams.get("name")?.trim() ?? ""
 
     if (requestedToolName) {
-        const tool = await getToolOrThrow(env, requestedToolName)
+        const tool = await getToolOrThrow(
+            env,
+            requestedToolName,
+            getRequestExperienceId(request),
+        )
         return jsonResponse({
             count: 1,
             tool,
         })
     }
 
-    const tools = await getRegistry(env).listStoredTools()
+    const tools = await getRequestRegistry(request, env).listStoredTools()
     return jsonResponse({
         count: tools.length,
         tools,
@@ -284,7 +295,7 @@ async function handleGenerateTool(
     const body = await readJson<RequestPayload>(request)
     const description = assertNonEmptyString(body.description, "description")
     const draftName = typeof body.name === "string" ? body.name.trim() : ""
-    const existingTools = await getRegistry(env).listTools()
+    const existingTools = await getRequestRegistry(request, env).listTools()
     const tool = await generateToolDefinition(env, {
         name: draftName,
         description,
@@ -389,11 +400,11 @@ async function handleGenerateFeaturePatch(
 }
 
 async function handleGetFeatureRuntime(
-    _request: Request,
+    request: Request,
     env: Env,
     _ctx: ExecutionContext,
 ): Promise<Response> {
-    const runtime = await getRegistry(env).getFeatureRuntime()
+    const runtime = await getRequestRegistry(request, env).getFeatureRuntime()
     return jsonResponse({ runtime })
 }
 
@@ -408,7 +419,7 @@ async function handleSaveFeatureRuntime(
         throw new HttpError(400, "runtime must be an object.")
     }
 
-    const savedRuntime = await getRegistry(env).saveFeatureRuntime(
+    const savedRuntime = await getRequestRegistry(request, env).saveFeatureRuntime(
         sanitizeFeatureRuntime(body.runtime as RequestPayload),
     )
 
@@ -416,11 +427,11 @@ async function handleSaveFeatureRuntime(
 }
 
 async function handleClearFeatureRuntime(
-    _request: Request,
+    request: Request,
     env: Env,
     _ctx: ExecutionContext,
 ): Promise<Response> {
-    const cleared = await getRegistry(env).clearFeatureRuntime()
+    const cleared = await getRequestRegistry(request, env).clearFeatureRuntime()
     return jsonResponse({ cleared })
 }
 
@@ -429,13 +440,15 @@ async function handleRunTool(
     env: Env,
     ctx: ExecutionContext,
 ): Promise<Response> {
+    const experienceId = getRequestExperienceId(request)
     const body = await readJson<RequestPayload>(request)
     const toolName = assertToolName(body.name)
-    const tool = await getToolOrThrow(env, toolName)
+    const tool = await getToolOrThrow(env, toolName, experienceId)
     const toolExecutor = ctx.exports.ToolExecutor({
         props: {
             depth: 0,
             stack: [tool.name],
+            experienceId,
         },
     })
     const { output, durationMs } = await runToolInSandbox(env, tool, body.input, {
@@ -447,6 +460,14 @@ async function handleRunTool(
         output,
         durationMs,
     })
+}
+
+function getRequestExperienceId(request: Request): string {
+    return resolveExperienceId(request.headers.get(EXPERIENCE_ID_HEADER))
+}
+
+function getRequestRegistry(request: Request, env: Env) {
+    return getRegistry(env, getRequestExperienceId(request))
 }
 
 function sanitizeFeatureRuntime(runtime: RequestPayload): FeatureRuntimeRecord {

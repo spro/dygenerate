@@ -1,7 +1,6 @@
 import type { ToolDefinitionInput } from "./types"
 
 export const COMPATIBILITY_DATE = "2026-03-17"
-export const REGISTRY_OBJECT_NAME = "global"
 export const TOOL_KEY_PREFIX = "tool:"
 export const FEATURE_RUNTIME_KEY = "feature-runtime"
 export const DEFAULT_EXAMPLE_INPUT = "{}"

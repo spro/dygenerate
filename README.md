@@ -18,6 +18,7 @@ Right now, the app already covers the first part of that loop:
 - generate a feature definition where model, actions, and views are planned together
 - keep a live app runtime in Zustand so follow-up prompts can patch state and update the UI immediately
 - persist generated feature definitions and runtime state in the Durable Object registry so the app survives reloads
+- scope each browser to its own generated workspace id so tool and feature state are isolated per user experience
 
 That makes it possible to build small chains of generated tools such as `doubleNthFibonacci` calling `nthFibonacci`, while also moving toward prompts like `create a todo app` followed by `set the second todo to done`.
 
@@ -95,6 +96,8 @@ The seeded tools include:
 ## Live feature runtime
 
 The main page now includes a feature studio that generates a shared feature definition, persists it in the Durable Object registry, and hydrates a Zustand-backed runtime store.
+
+Each browser gets its own generated workspace id, which is sent with API requests and used to select a separate Durable Object instance. The app also syncs that id into the page URL as `?workspace=...`, so you can reload, bookmark, or share a workspace link and keep the same isolated tool and feature state.
 
 That runtime currently tracks:
 
@@ -225,6 +228,7 @@ npm run deploy
 
 - This is a demo project for generated function execution, not a hardened multi-tenant platform.
 - Tool definitions are persisted in a Durable Object rather than an external database.
+- The browser stores a generated workspace id in localStorage, mirrors it into `?workspace=...`, and includes it in API requests so each visitor gets an isolated Durable Object-backed workspace.
 - Workers AI is used to draft tools, components, features, and feature patches, but all of them can still be inspected and evolved manually.
 - Client state is now split: tool workbench state still uses local React state, while the generated feature runtime uses Zustand. The long-term direction is to consolidate more of the app around Zustand.
 - If you change bindings in `wrangler.jsonc`, rerun `npm run types`.
