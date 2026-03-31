@@ -3,7 +3,13 @@ import prettier from "prettier/standalone"
 import babelPlugin from "prettier/plugins/babel"
 import estreePlugin from "prettier/plugins/estree"
 
-import { TOOL_GENERATION_SCHEMA, TOOL_GENERATOR_MODEL } from "./constants"
+import {
+    COMPONENT_GENERATION_SCHEMA,
+    FEATURE_GENERATION_SCHEMA,
+    FEATURE_PATCH_SCHEMA,
+    TOOL_GENERATION_SCHEMA,
+    TOOL_GENERATOR_MODEL,
+} from "./constants"
 import {
     HttpError,
     safeJsonPreview,
@@ -16,6 +22,12 @@ import {
     normalizeToolDefinition,
 } from "./tool-definition"
 import type {
+    ComponentDefinition,
+    ComponentGenerationDraft,
+    FeatureDefinition,
+    FeatureGenerationDraft,
+    FeaturePatchDraft,
+    GeneratedFeaturePatchPayload,
     GeneratedToolDefinitionPayload,
     ToolDefinition,
     ToolGenerationDraft,
@@ -75,10 +87,74 @@ export async function generateToolDefinition(
             name: normalizedName,
             description: payload.description || draft.description,
             inputSchemaSource: payload.inputSchemaSource,
+            outputSchemaSource: payload.outputSchemaSource,
             exampleInput: payload.exampleInput,
             executeSource: formattedExecuteSource,
         },
         null,
+    )
+}
+
+export async function generateComponentDefinition(
+    env: Env,
+    draft: ComponentGenerationDraft,
+): Promise<ComponentDefinition> {
+    const result = await runAiJsonRequest(env, {
+        systemPrompt:
+            "You create frontend component definitions for a browser UI. Reply only with JSON that matches the response schema, without Markdown fences or extra backticks.",
+        prompt: buildComponentGenerationPrompt(draft),
+        schema: COMPONENT_GENERATION_SCHEMA,
+        temperature: 0.2,
+        maxTokens: 700,
+        failureMessage: `Workers AI component generation failed while calling ${TOOL_GENERATOR_MODEL}.`,
+    })
+
+    return parseAiObject<ComponentDefinition>(
+        result,
+        "Workers AI returned an empty response for the generated component.",
+        "Workers AI returned invalid JSON for the generated component.",
+    )
+}
+
+export async function generateFeatureDefinition(
+    env: Env,
+    draft: FeatureGenerationDraft,
+): Promise<FeatureDefinition> {
+    const result = await runAiJsonRequest(env, {
+        systemPrompt:
+            "You create feature definitions for a live generated app runtime. Reply only with JSON that matches the response schema, without Markdown fences or extra backticks.",
+        prompt: buildFeatureGenerationPrompt(draft),
+        schema: FEATURE_GENERATION_SCHEMA,
+        temperature: 0.2,
+        maxTokens: 900,
+        failureMessage: `Workers AI feature generation failed while calling ${TOOL_GENERATOR_MODEL}.`,
+    })
+
+    return parseAiObject<FeatureDefinition>(
+        result,
+        "Workers AI returned an empty response for the generated feature.",
+        "Workers AI returned invalid JSON for the generated feature.",
+    )
+}
+
+export async function generateFeaturePatches(
+    env: Env,
+    draft: FeaturePatchDraft,
+): Promise<GeneratedFeaturePatchPayload> {
+    const result = await runAiJsonRequest(env, {
+        systemPrompt:
+            "You translate follow-up user prompts into JSON patches for a live generated app runtime. Reply only with JSON that matches the response schema, without Markdown fences or extra backticks.",
+        prompt: buildFeaturePatchPrompt(draft),
+        schema: FEATURE_PATCH_SCHEMA,
+        temperature: 0.1,
+        maxTokens: 700,
+        failureMessage: `Workers AI feature patch generation failed while calling ${TOOL_GENERATOR_MODEL}.`,
+    })
+
+    return parseAiObject<GeneratedFeaturePatchPayload>(
+        result,
+        "Workers AI returned an empty response for the generated feature patch.",
+        "Workers AI returned invalid JSON for the generated feature patch.",
     )
 }
 
@@ -289,6 +365,7 @@ function buildToolGenerationPrompt(draft: ToolGenerationDraft): string {
         "Return fields that match the provided JSON schema.",
         "Requirements:",
         "- inputSchemaSource must be a JavaScript expression using z.object(...).",
+        "- outputSchemaSource must be a JavaScript expression using z.object(...) that accurately describes the returned JSON shape.",
         "- exampleInput must be valid JSON as a string and must match the schema.",
         "- executeSource must be an async JavaScript function expression.",
         "- executeSource receives the main input object as its first argument.",
@@ -307,6 +384,60 @@ function buildToolGenerationPrompt(draft: ToolGenerationDraft): string {
         ...buildExistingToolsPrompt(draft),
         'Example: if an existing tool is named "repeatWord" and the description is "repeat this word 3 times", use a more specific name like "repeatWord3Times" or "repeat3Times", not "repeatWord".',
         `User description: ${draft.description}`,
+    ].join("\n")
+}
+
+function buildComponentGenerationPrompt(
+    draft: ComponentGenerationDraft,
+): string {
+    return [
+        "Generate a frontend component definition for a browser UI that wraps a generated backend tool.",
+        "Return fields that match the provided JSON schema.",
+        "Requirements:",
+        '- kind must be "toolForm".',
+        "- Keep the component realistic, concise, and useful for a product UI.",
+        "- The component should help a user run the selected tool and understand the result.",
+        "- fieldConfig keys should match the tool input field names when possible.",
+        "- field labels, help text, and placeholders should be specific and readable.",
+        "- Do not invent fields that are not in the tool input.",
+        "- Prefer clear product copy over generic AI-sounding wording.",
+        `Selected tool name: ${draft.toolName}`,
+        `Selected tool description: ${draft.toolDescription}`,
+        `Selected tool input schema: ${draft.inputSchemaSource || "(none)"}`,
+        `Selected tool output schema: ${draft.outputSchemaSource || "(none)"}`,
+        `Selected tool example input: ${draft.exampleInput || "{}"}`,
+        `User description: ${draft.description}`,
+    ].join("\n")
+}
+
+function buildFeatureGenerationPrompt(draft: FeatureGenerationDraft): string {
+    return [
+        "Generate a feature definition for a live generated app runtime.",
+        "Return fields that match the provided JSON schema.",
+        "Requirements:",
+        "- The feature must bundle data model, actions, views, and initial entity state.",
+        "- Prefer practical CRUD-like actions and views that fit the described feature.",
+        "- fields should use only string, number, or boolean types.",
+        "- initialEntities may be empty, but can include a few realistic starter records when helpful.",
+        "- If there is a boolean completion or status field, include it as statusField.",
+        "- Use short, readable labels and descriptions.",
+        `User description: ${draft.description}`,
+    ].join("\n")
+}
+
+function buildFeaturePatchPrompt(draft: FeaturePatchDraft): string {
+    return [
+        "Translate the user's follow-up prompt into JSON patches against the current feature state.",
+        "Return fields that match the provided JSON schema.",
+        "Requirements:",
+        "- Only emit patches that are necessary to satisfy the prompt.",
+        "- Use zero-based indexes in patch targets.",
+        "- Prefer entity.updateField or entity.toggleField for targeted edits.",
+        "- Use entity.add for adding a single record, entity.replaceAll for replacing the whole collection, and entity.remove for deletions.",
+        "- Do not invent new fields that are not in the feature model.",
+        `Current feature: ${JSON.stringify(draft.feature)}`,
+        `Current entities: ${JSON.stringify(draft.entities)}`,
+        `User prompt: ${draft.prompt}`,
     ].join("\n")
 }
 

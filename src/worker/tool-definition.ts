@@ -14,6 +14,9 @@ export function normalizeToolDefinition(
     const inputSchemaSource = normalizeGeneratedSnippet(
         definition.inputSchemaSource,
     )
+    const outputSchemaSource = normalizeGeneratedSnippet(
+        definition.outputSchemaSource,
+    )
     const executeSource = assertNonEmptyString(
         normalizeGeneratedSnippet(definition.executeSource),
         "executeSource",
@@ -25,6 +28,7 @@ export function normalizeToolDefinition(
         name,
         description,
         inputSchemaSource,
+        outputSchemaSource,
         exampleInput,
         executeSource,
         createdAt: existing?.createdAt ?? now,
@@ -87,6 +91,7 @@ export function toToolSummary(tool: ToolDefinition): ToolSummary {
         createdAt: tool.createdAt,
         updatedAt: tool.updatedAt,
         hasInputSchemaSource: Boolean(tool.inputSchemaSource),
+        hasOutputSchemaSource: Boolean(tool.outputSchemaSource),
     }
 }
 

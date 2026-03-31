@@ -1,48 +1,93 @@
-export interface ToolSummary {
+export interface FeatureFieldDefinition {
+    type: "string" | "number" | "boolean"
+    label: string
+    description: string
+}
+
+export interface FeatureActionDefinition {
+    name: string
+    kind: "create" | "updateField" | "toggleBoolean" | "delete"
+    label: string
+    field?: string
+}
+
+export interface FeatureViewDefinition {
+    name: string
+    kind: "list" | "form" | "stats"
+    title: string
+    description: string
+    visibleFields: string[]
+}
+
+export interface FeatureDefinition {
     name: string
     description: string
-    createdAt: string
+    entityName: string
+    collectionName: string
+    primaryField: string
+    statusField?: string
+    fields: Record<string, FeatureFieldDefinition>
+    actions: FeatureActionDefinition[]
+    views: FeatureViewDefinition[]
+    initialEntities: Array<Record<string, unknown>>
+}
+
+export type FeaturePatch =
+    | {
+          type: "entity.add"
+          entity: Record<string, unknown>
+      }
+    | {
+          type: "entity.updateField"
+          target: {
+              index: number
+          }
+          field: string
+          value: unknown
+      }
+    | {
+          type: "entity.toggleField"
+          target: {
+              index: number
+          }
+          field: string
+      }
+    | {
+          type: "entity.remove"
+          target: {
+              index: number
+          }
+      }
+    | {
+          type: "entity.replaceAll"
+          entities: Array<Record<string, unknown>>
+      }
+
+export interface GenerateFeatureResponse {
+    feature: FeatureDefinition
+}
+
+export interface ApplyFeaturePromptResponse {
+    summary: string
+    patches: FeaturePatch[]
+}
+
+export interface FeaturePromptHistoryEntry {
+    prompt: string
+    summary: string
+    appliedPatches: FeaturePatch[]
+    at: string
+}
+
+export interface FeatureRuntimeRecord {
+    feature: FeatureDefinition | null
+    entities: Array<Record<string, unknown>>
+    promptHistory: FeaturePromptHistoryEntry[]
     updatedAt: string
-    hasInputSchemaSource: boolean
 }
 
-export interface ToolDefinition {
-    name: string
-    description: string
-    inputSchemaSource: string
-    exampleInput: string
-    executeSource: string
-    createdAt?: string
-    updatedAt?: string
-    hasInputSchemaSource?: boolean
-}
-
-export interface ToolsListResponse {
-    tools: ToolSummary[]
-}
-
-export interface ToolResponse {
-    tool: ToolDefinition
-}
-
-export interface RunToolResponse {
-    name: string
-    output: unknown
-    durationMs: number
-}
-
-export interface SeedToolsResponse {
-    created: number
-    updated: number
-    total: number
-}
-
-export interface ClearToolsResponse {
-    deletedCount: number
-}
-
-export interface GenerateToolResponse {
-    tool: ToolDefinition
+export interface FeatureRuntimeResponse {
+    runtime: FeatureRuntimeRecord | null
 }
 
 export interface ErrorSection {
@@ -88,36 +133,4 @@ export interface ApiErrorPayload {
         contentType: string | null
     }
     [key: string]: unknown
-}
-
-export interface InputFieldChip {
-    name: string
-    type: string
-}
-
-export interface RunHistoryEntry {
-    status: "success" | "error"
-    at: string
-    durationMs?: number
-    input: unknown
-    output?: unknown
-    message?: string
-}
-
-export type ActiveTab = "run" | "schema" | "history"
-
-export const BLANK_TOOL: ToolDefinition = {
-    name: "",
-    description: "",
-    inputSchemaSource: `z.object({
-  text: z.string().describe("Some input to transform"),
-})`,
-    exampleInput: `{
-  "text": "hello world"
-}`,
-    executeSource: `async ({ text }, tools) => {
-  return {
-    text: text.toUpperCase(),
-  }
-}`,
 }

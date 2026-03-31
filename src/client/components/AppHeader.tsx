@@ -1,22 +1,7 @@
 import { twMerge } from "tailwind-merge"
-import { Button, panelSurfaceClass } from "./Primitives"
+import { panelSurfaceClass } from "./Primitives"
 
-interface AppHeaderProps {
-    toolCount: number
-    isClearing: boolean
-    isSeeding: boolean
-    onClearAll: () => void
-    onNewTool: () => void
-    onSeedSamples: () => void
-}
-
-export function AppHeader({
-    isClearing,
-    isSeeding,
-    onClearAll,
-    onNewTool,
-    onSeedSamples,
-}: AppHeaderProps) {
+export function AppHeader() {
     return (
         <header
             className={twMerge(
@@ -26,28 +11,14 @@ export function AppHeader({
         >
             <div>
                 <h1 className="text-2xl font-semibold text-stone-900 sm:text-3xl">
-                    Generated Isolates
+                    dygenerate
                 </h1>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                    variant="danger"
-                    onClick={onClearAll}
-                    disabled={isClearing}
-                >
-                    Clear all
-                </Button>
-                <Button
-                    variant="secondary"
-                    onClick={onSeedSamples}
-                    disabled={isSeeding}
-                >
-                    Seed samples
-                </Button>
-                <Button variant="primary" onClick={onNewTool}>
-                    New tool
-                </Button>
+                <p className="mt-1 text-sm text-stone-500 sm:text-base">
+                    A feature-first generated app runtime where model, actions, views, and live state evolve together.
+                </p>
+                <p className="mt-2 text-sm text-stone-400">
+                    Start with a prompt like “create a todo app”, then keep steering the running state with follow-up prompts.
+                </p>
             </div>
         </header>
     )

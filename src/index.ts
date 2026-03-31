@@ -1,6 +1,11 @@
 import { WorkerEntrypoint } from "cloudflare:workers"
 
-import { generateToolDefinition } from "./worker/ai"
+import {
+    generateComponentDefinition,
+    generateFeatureDefinition,
+    generateFeaturePatches,
+    generateToolDefinition,
+} from "./worker/ai"
 import { MAX_TOOL_CALL_DEPTH } from "./worker/constants"
 import {
     errorResponse,
@@ -16,7 +21,13 @@ import {
     assertToolName,
     toToolSummary,
 } from "./worker/tool-definition"
-import type { RequestPayload } from "./worker/types"
+import type {
+    FeatureDefinition,
+    FeaturePatch,
+    FeaturePromptHistoryEntry,
+    FeatureRuntimeRecord,
+    RequestPayload,
+} from "./worker/types"
 
 export { ToolRegistry }
 
@@ -56,6 +67,20 @@ const EXACT_ROUTES: RouteTable = {
     },
     "/api/tools/clear": {
         POST: handleClearTools,
+    },
+    "/api/components/generate": {
+        POST: handleGenerateComponent,
+    },
+    "/api/features/generate": {
+        POST: handleGenerateFeature,
+    },
+    "/api/features/patch": {
+        POST: handleGenerateFeaturePatch,
+    },
+    "/api/features/runtime": {
+        GET: handleGetFeatureRuntime,
+        POST: handleSaveFeatureRuntime,
+        DELETE: handleClearFeatureRuntime,
     },
     "/api/run": {
         POST: handleRunTool,
@@ -269,6 +294,136 @@ async function handleGenerateTool(
     return jsonResponse({ tool })
 }
 
+async function handleGenerateComponent(
+    request: Request,
+    env: Env,
+    _ctx: ExecutionContext,
+): Promise<Response> {
+    if (!env.AI) {
+        throw new HttpError(
+            500,
+            "Workers AI binding is missing. Add an AI binding in wrangler.jsonc before generating components.",
+        )
+    }
+
+    const body = await readJson<RequestPayload>(request)
+    const description = assertNonEmptyString(body.description, "description")
+    const toolName = assertToolName(body.toolName)
+    const toolDescription =
+        typeof body.toolDescription === "string" ? body.toolDescription : ""
+    const inputSchemaSource =
+        typeof body.inputSchemaSource === "string" ? body.inputSchemaSource : ""
+    const outputSchemaSource =
+        typeof body.outputSchemaSource === "string"
+            ? body.outputSchemaSource
+            : ""
+    const exampleInput =
+        typeof body.exampleInput === "string" ? body.exampleInput : "{}"
+
+    const component = await generateComponentDefinition(env, {
+        description,
+        toolName,
+        toolDescription,
+        inputSchemaSource,
+        outputSchemaSource,
+        exampleInput,
+    })
+
+    return jsonResponse({ component })
+}
+
+async function handleGenerateFeature(
+    request: Request,
+    env: Env,
+    _ctx: ExecutionContext,
+): Promise<Response> {
+    if (!env.AI) {
+        throw new HttpError(
+            500,
+            "Workers AI binding is missing. Add an AI binding in wrangler.jsonc before generating features.",
+        )
+    }
+
+    const body = await readJson<RequestPayload>(request)
+    const description = assertNonEmptyString(body.description, "description")
+    const feature = await generateFeatureDefinition(env, {
+        description,
+    })
+
+    return jsonResponse({ feature })
+}
+
+async function handleGenerateFeaturePatch(
+    request: Request,
+    env: Env,
+    _ctx: ExecutionContext,
+): Promise<Response> {
+    if (!env.AI) {
+        throw new HttpError(
+            500,
+            "Workers AI binding is missing. Add an AI binding in wrangler.jsonc before generating feature patches.",
+        )
+    }
+
+    const body = await readJson<RequestPayload>(request)
+    const prompt = assertNonEmptyString(body.prompt, "prompt")
+
+    if (!body.feature || typeof body.feature !== "object") {
+        throw new HttpError(400, "feature must be an object.")
+    }
+
+    const entities = Array.isArray(body.entities)
+        ? body.entities.filter(
+              (entity): entity is Record<string, unknown> =>
+                  Boolean(entity) && typeof entity === "object",
+          )
+        : []
+
+    const result = await generateFeaturePatches(env, {
+        prompt,
+        feature: body.feature as FeatureDefinition,
+        entities,
+    })
+
+    return jsonResponse(result)
+}
+
+async function handleGetFeatureRuntime(
+    _request: Request,
+    env: Env,
+    _ctx: ExecutionContext,
+): Promise<Response> {
+    const runtime = await getRegistry(env).getFeatureRuntime()
+    return jsonResponse({ runtime })
+}
+
+async function handleSaveFeatureRuntime(
+    request: Request,
+    env: Env,
+    _ctx: ExecutionContext,
+): Promise<Response> {
+    const body = await readJson<RequestPayload>(request)
+
+    if (!body.runtime || typeof body.runtime !== "object") {
+        throw new HttpError(400, "runtime must be an object.")
+    }
+
+    const savedRuntime = await getRegistry(env).saveFeatureRuntime(
+        sanitizeFeatureRuntime(body.runtime as RequestPayload),
+    )
+
+    return jsonResponse({ runtime: savedRuntime })
+}
+
+async function handleClearFeatureRuntime(
+    _request: Request,
+    env: Env,
+    _ctx: ExecutionContext,
+): Promise<Response> {
+    const cleared = await getRegistry(env).clearFeatureRuntime()
+    return jsonResponse({ cleared })
+}
+
 async function handleRunTool(
     request: Request,
     env: Env,
@@ -292,6 +447,51 @@ async function handleRunTool(
         output,
         durationMs,
     })
+}
+
+function sanitizeFeatureRuntime(runtime: RequestPayload): FeatureRuntimeRecord {
+    return {
+        feature:
+            runtime.feature && typeof runtime.feature === "object"
+                ? (runtime.feature as FeatureDefinition)
+                : null,
+        entities: Array.isArray(runtime.entities)
+            ? runtime.entities.filter(
+                  (entity): entity is Record<string, unknown> =>
+                      Boolean(entity) && typeof entity === "object",
+              )
+            : [],
+        promptHistory: Array.isArray(runtime.promptHistory)
+            ? runtime.promptHistory.filter(isFeaturePromptHistoryEntry)
+            : [],
+        updatedAt: new Date().toISOString(),
+    }
+}
+
+function isFeaturePromptHistoryEntry(
+    value: unknown,
+): value is FeaturePromptHistoryEntry {
+    if (!value || typeof value !== "object") {
+        return false
+    }
+
+    const entry = value as RequestPayload
+    return (
+        typeof entry.prompt === "string" &&
+        typeof entry.summary === "string" &&
+        typeof entry.at === "string" &&
+        Array.isArray(entry.appliedPatches) &&
+        entry.appliedPatches.every(isFeaturePatch)
+    )
+}
+
+function isFeaturePatch(value: unknown): value is FeaturePatch {
+    if (!value || typeof value !== "object") {
+        return false
+    }
+
+    const patch = value as RequestPayload
+    return typeof patch.type === "string"
 }
 
 function normalizeToolCallDepth(value: number): number {
