@@ -12,9 +12,6 @@ export default function App() {
         activeTab,
         busyActions,
         closeNewToolModal,
-        currentHistory,
-        currentTool,
-        currentToolName,
         deletingToolName,
         editorDraft,
         editorPanel,
@@ -30,17 +27,20 @@ export default function App() {
         handleSeedTools,
         inputFields,
         isNewToolModalOpen,
-        loadTool,
         newToolDraft,
         newToolPanel,
-        updateNewToolDraft,
         resultsPanel,
         runInput,
+        selectedTool,
+        selectedToolHistory,
+        selectedToolName,
+        selectTool,
         setActiveTab,
         setGenerationDescription,
         setRunInput,
         tools,
         updateEditorDraft,
+        updateNewToolDraft,
     } = useToolWorkbench()
 
     function scrollToEditor(): void {
@@ -65,19 +65,19 @@ export default function App() {
                 <main className="grid flex-1 grid-cols-1 gap-0 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(360px,1fr)_minmax(420px,1fr)]">
                     <RegistrySidebar
                         tools={tools}
-                        currentToolName={currentToolName}
-                        onSelectTool={(name) => void loadTool(name)}
+                        selectedToolName={selectedToolName}
+                        onSelectTool={(name) => void selectTool(name)}
                     />
 
                     <RunColumn
-                        currentTool={currentTool}
+                        selectedTool={selectedTool}
                         activeTab={activeTab}
                         inputFields={inputFields}
                         runInput={runInput}
-                        currentHistory={currentHistory}
+                        selectedToolHistory={selectedToolHistory}
                         resultsPanel={resultsPanel}
                         isRunning={busyActions.run}
-                        onSetActiveTab={setActiveTab}
+                        onActiveTabChange={setActiveTab}
                         onRunInputChange={setRunInput}
                         onLoadExample={handleLoadExample}
                         onRunTool={() => void handleRunTool()}
@@ -88,7 +88,7 @@ export default function App() {
                         panelRef={(node) => {
                             editorPanelRef.current = node
                         }}
-                        currentTool={currentTool}
+                        selectedTool={selectedTool}
                         deletingToolName={deletingToolName}
                         editorDraft={editorDraft}
                         editorPanel={editorPanel}

@@ -11,7 +11,7 @@ import {
 
 interface EditorColumnProps {
     panelRef: (node: HTMLElement | null) => void
-    currentTool: ToolDefinition | null
+    selectedTool: ToolDefinition | null
     deletingToolName: string | null
     editorDraft: ToolDefinition
     editorPanel: PanelState | null
@@ -23,7 +23,7 @@ interface EditorColumnProps {
 
 export function EditorColumn({
     panelRef,
-    currentTool,
+    selectedTool,
     deletingToolName,
     editorDraft,
     editorPanel,
@@ -32,7 +32,7 @@ export function EditorColumn({
     onSaveTool,
     onDeleteTool,
 }: EditorColumnProps) {
-    const showEmptyState = !currentTool && isBlankEditorDraft(editorDraft)
+    const showEmptyState = !selectedTool && isBlankEditorDraft(editorDraft)
 
     return (
         <section
@@ -48,7 +48,7 @@ export function EditorColumn({
                     <Button
                         variant="danger"
                         onClick={onDeleteTool}
-                        disabled={!currentTool || deletingToolName !== null}
+                        disabled={!selectedTool || deletingToolName !== null}
                     >
                         Delete
                     </Button>

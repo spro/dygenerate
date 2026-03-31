@@ -20,7 +20,9 @@ type BusyAction = "seed" | "clear" | "generate" | "save" | "run"
 
 export function useToolWorkbench() {
     const [tools, setTools] = useState<ToolSummary[]>([])
-    const [currentTool, setCurrentTool] = useState<ToolDefinition | null>(null)
+    const [selectedTool, setSelectedTool] = useState<ToolDefinition | null>(
+        null,
+    )
     const [editorDraft, setEditorDraft] = useState<ToolDefinition>(() => ({
         ...BLANK_TOOL,
     }))
@@ -50,15 +52,15 @@ export function useToolWorkbench() {
         null,
     )
 
-    const currentToolName = currentTool?.name ?? ""
-    const currentHistory = useMemo(
+    const selectedToolName = selectedTool?.name ?? ""
+    const selectedToolHistory = useMemo(
         () =>
-            currentToolName ? (runHistoryByTool[currentToolName] ?? []) : [],
-        [currentToolName, runHistoryByTool],
+            selectedToolName ? (runHistoryByTool[selectedToolName] ?? []) : [],
+        [selectedToolName, runHistoryByTool],
     )
     const inputFields = useMemo(
-        () => inferInputFields(currentTool),
-        [currentTool],
+        () => inferInputFields(selectedTool),
+        [selectedTool],
     )
 
     useEffect(() => {
@@ -79,29 +81,29 @@ export function useToolWorkbench() {
             return
         }
 
-        const nextToolName =
-            preferredToolName ?? currentTool?.name ?? nextTools[0]?.name
+        const nextSelectedToolName =
+            preferredToolName ?? selectedTool?.name ?? nextTools[0]?.name
 
         if (
-            nextToolName &&
-            nextTools.some((tool) => tool.name === nextToolName)
+            nextSelectedToolName &&
+            nextTools.some((tool) => tool.name === nextSelectedToolName)
         ) {
-            await loadTool(nextToolName)
+            await selectTool(nextSelectedToolName)
             return
         }
 
         selectUnsavedTool()
     }
 
-    async function loadTool(name: string): Promise<void> {
+    async function selectTool(name: string): Promise<void> {
         const payload = await fetchJson<ToolResponse>(
             `/api/tools/${encodeURIComponent(name)}`,
         )
-        showTool(payload.tool)
+        selectToolDefinition(payload.tool)
     }
 
-    function showTool(tool: ToolDefinition | null): void {
-        setCurrentTool(tool)
+    function selectToolDefinition(tool: ToolDefinition | null): void {
+        setSelectedTool(tool)
         setEditorDraft({ ...(tool ?? BLANK_TOOL) })
         setRunInput(tool?.exampleInput ?? BLANK_TOOL.exampleInput)
         setResultsPanel(null)
@@ -109,7 +111,7 @@ export function useToolWorkbench() {
     }
 
     function selectUnsavedTool(): void {
-        showTool(null)
+        selectToolDefinition(null)
         setActiveTab("run")
     }
 
@@ -252,7 +254,7 @@ export function useToolWorkbench() {
     }
 
     async function handleDeleteToolFromEditor(): Promise<void> {
-        const name = currentTool?.name.trim()
+        const name = selectedTool?.name.trim()
         if (!name) {
             setEditorPanel({
                 kind: "message",
@@ -270,7 +272,7 @@ export function useToolWorkbench() {
     }
 
     async function handleRunTool(): Promise<void> {
-        if (!currentTool) {
+        if (!selectedTool) {
             setResultsPanel({
                 kind: "message",
                 tone: "fail",
@@ -301,13 +303,13 @@ export function useToolWorkbench() {
             const result = await fetchJson<RunToolResponse>(
                 "/api/run",
                 jsonRequest("POST", {
-                    name: currentTool.name,
+                    name: selectedTool.name,
                     input,
                 }),
             )
 
             setRunHistoryByTool((current) =>
-                pushRunHistory(current, currentTool.name, {
+                pushRunHistory(current, selectedTool.name, {
                     status: "success",
                     at: new Date().toISOString(),
                     durationMs: result.durationMs,
@@ -324,7 +326,7 @@ export function useToolWorkbench() {
             })
         } catch (error) {
             setRunHistoryByTool((current) =>
-                pushRunHistory(current, currentTool.name, {
+                pushRunHistory(current, selectedTool.name, {
                     status: "error",
                     at: new Date().toISOString(),
                     input,
@@ -342,7 +344,7 @@ export function useToolWorkbench() {
 
     function handleLoadExample(): void {
         setRunInput(
-            currentTool?.exampleInput ||
+            selectedTool?.exampleInput ||
                 editorDraft.exampleInput ||
                 BLANK_TOOL.exampleInput,
         )
@@ -392,9 +394,6 @@ export function useToolWorkbench() {
         activeTab,
         busyActions,
         closeNewToolModal,
-        currentHistory,
-        currentTool,
-        currentToolName,
         deletingToolName,
         editorDraft,
         editorPanel,
@@ -410,16 +409,19 @@ export function useToolWorkbench() {
         handleSeedTools,
         inputFields,
         isNewToolModalOpen,
-        loadTool,
         newToolDraft,
         newToolPanel,
-        updateNewToolDraft,
         resultsPanel,
         runInput,
+        selectedTool,
+        selectedToolHistory,
+        selectedToolName,
+        selectTool,
         setActiveTab,
         setGenerationDescription,
         setRunInput,
         tools,
         updateEditorDraft,
+        updateNewToolDraft,
     }
 }

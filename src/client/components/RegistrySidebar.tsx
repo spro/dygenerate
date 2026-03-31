@@ -5,13 +5,13 @@ import { panelSurfaceClass } from "./Primitives"
 
 interface RegistrySidebarProps {
     tools: ToolSummary[]
-    currentToolName: string
+    selectedToolName: string
     onSelectTool: (name: string) => void
 }
 
 export function RegistrySidebar({
     tools,
-    currentToolName,
+    selectedToolName,
     onSelectTool,
 }: RegistrySidebarProps) {
     return (
@@ -28,7 +28,7 @@ export function RegistrySidebar({
                     </div>
                 ) : (
                     tools.map((tool) => {
-                        const isActive = tool.name === currentToolName
+                        const isSelected = tool.name === selectedToolName
 
                         return (
                             <button
@@ -36,7 +36,7 @@ export function RegistrySidebar({
                                 type="button"
                                 className={twMerge(
                                     "flex w-full min-w-0 items-center justify-between gap-3 bg-white px-3 py-2 text-left text-sm transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-300 active:translate-y-px",
-                                    isActive
+                                    isSelected
                                         ? "bg-stone-900 text-blue-500"
                                         : "text-stone-900 hover:bg-stone-100",
                                 )}

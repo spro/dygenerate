@@ -18,14 +18,14 @@ import {
 } from "./Primitives"
 
 interface RunColumnProps {
-    currentTool: ToolDefinition | null
+    selectedTool: ToolDefinition | null
     activeTab: ActiveTab
     inputFields: InputFieldChip[]
     runInput: string
-    currentHistory: RunHistoryEntry[]
+    selectedToolHistory: RunHistoryEntry[]
     resultsPanel: PanelState | null
     isRunning: boolean
-    onSetActiveTab: (tab: ActiveTab) => void
+    onActiveTabChange: (tab: ActiveTab) => void
     onRunInputChange: (value: string) => void
     onLoadExample: () => void
     onRunTool: () => void
@@ -35,14 +35,14 @@ interface RunColumnProps {
 const TABS: ActiveTab[] = ["run", "schema", "history"]
 
 export function RunColumn({
-    currentTool,
+    selectedTool,
     activeTab,
     inputFields,
     runInput,
-    currentHistory,
+    selectedToolHistory,
     resultsPanel,
     isRunning,
-    onSetActiveTab,
+    onActiveTabChange,
     onRunInputChange,
     onLoadExample,
     onRunTool,
@@ -53,11 +53,11 @@ export function RunColumn({
             <div className="flex items-start justify-between gap-3 border-b border-stone-300 pb-3">
                 <div className="min-w-0">
                     <h2 className="truncate text-lg font-semibold text-stone-900">
-                        {currentTool?.name ?? "No tool selected"}
+                        {selectedTool?.name ?? "No tool selected"}
                     </h2>
-                    {currentTool?.description ? (
+                    {selectedTool?.description ? (
                         <div className="mt-1 text-sm text-stone-500">
-                            {currentTool.description}
+                            {selectedTool.description}
                         </div>
                     ) : null}
                 </div>
@@ -68,8 +68,8 @@ export function RunColumn({
 
             <div className="mt-3 flex items-center gap-3 border-b border-stone-300 pb-3 text-sm text-stone-500">
                 <span>
-                    {currentTool?.updatedAt
-                        ? `Updated ${formatDate(currentTool.updatedAt)}`
+                    {selectedTool?.updatedAt
+                        ? `Updated ${formatDate(selectedTool.updatedAt)}`
                         : "Unsaved"}
                 </span>
             </div>
@@ -79,7 +79,7 @@ export function RunColumn({
                     <TabButton
                         key={tab}
                         active={activeTab === tab}
-                        onClick={() => onSetActiveTab(tab)}
+                        onClick={() => onActiveTabChange(tab)}
                     >
                         {tab === "run"
                             ? "Run"
@@ -164,7 +164,7 @@ export function RunColumn({
                             Input schema
                         </div>
                         <pre className={codeBlockClass}>
-                            {currentTool?.inputSchemaSource ||
+                            {selectedTool?.inputSchemaSource ||
                                 "No tool selected."}
                         </pre>
                     </div>
@@ -173,7 +173,7 @@ export function RunColumn({
                             Example input
                         </div>
                         <pre className={codeBlockClass}>
-                            {currentTool?.exampleInput || "{}"}
+                            {selectedTool?.exampleInput || "{}"}
                         </pre>
                     </div>
                 </section>
@@ -186,12 +186,12 @@ export function RunColumn({
                             History
                         </div>
                         <div className="grid gap-2.5">
-                            {!currentTool ? (
+                            {!selectedTool ? (
                                 <MessageCard message="No tool selected." />
-                            ) : currentHistory.length === 0 ? (
+                            ) : selectedToolHistory.length === 0 ? (
                                 <MessageCard message="No runs yet." />
                             ) : (
-                                currentHistory.map((entry, index) => (
+                                selectedToolHistory.map((entry, index) => (
                                     <RunHistoryCard
                                         key={`${entry.at}-${index}`}
                                         entry={entry}
@@ -208,7 +208,7 @@ export function RunColumn({
                     variant="primary"
                     className="w-full sm:w-auto"
                     onClick={onRunTool}
-                    disabled={!currentTool || isRunning}
+                    disabled={!selectedTool || isRunning}
                 >
                     Run tool
                 </Button>
