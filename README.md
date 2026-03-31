@@ -1,48 +1,26 @@
-# Generated Isolates
+# dygenerate
 
-`Generated Isolates` is a Cloudflare-native spin on the ideas in `/Users/sean/Learning/aisdk/mutagent`.
+Generate JavaScript functions, save them, and run them inside Cloudflare Dynamic Workers.
 
-Instead of storing dynamic tool definitions in Redis, this project now uses:
+The main point of this project is simple:
 
-- **Durable Objects** as the strongly consistent registry for saved tools
-- **Workers AI** to draft tool definitions from a plain-English description
-- **Dynamic Workers** to execute each tool inside an isolated sandbox
-- **A Vite + React + TypeScript SPA** for the browser UI
+- describe a function in plain English
+- let Workers AI draft it
+- save it in a registry
+- execute it in an isolated Dynamic Worker sandbox
+- allow one generated function to call another through a narrow RPC capability
 
-## Why Durable Objects instead of Redis?
+That makes it possible to build small chains of generated tools such as `doubleNthFibonacci` calling `nthFibonacci`.
 
-The original `mutagent` project persists tool definitions in Redis so later runs can load, list, seed, and clear them.
+## What it uses
 
-For a Cloudflare-first version, **Durable Objects** are the closest fit because they combine:
+- **Cloudflare Workers** for the main API
+- **Dynamic Workers** for isolated execution of generated code
+- **Durable Objects** for the tool registry
+- **Workers AI** for tool generation
+- **Vite + React + TypeScript** for the browser UI
 
-- per-object, strongly consistent state
-- simple key/value style storage APIs
-- direct RPC calls from the main Worker
-- no separate infrastructure to run or manage
-
-That makes the registry feel a lot like a tiny Redis-backed tool store, but fully inside Cloudflare Workers.
-
-Cloudflare docs used for this rewrite:
-
-- [Workers](https://developers.cloudflare.com/workers/)
-- [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
-- [Durable Objects](https://developers.cloudflare.com/durable-objects/)
-- [Durable Object limits](https://developers.cloudflare.com/durable-objects/platform/limits/)
-- [Durable Object migrations](https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/)
-- [Dynamic Workers](https://developers.cloudflare.com/dynamic-workers/)
-- [Workers AI](https://developers.cloudflare.com/workers-ai/)
-- [Workers AI limits](https://developers.cloudflare.com/workers-ai/platform/limits/)
-
-## What the app does
-
-The app lets you:
-
-1. describe a tool in plain English and have Workers AI draft the name, schema, example input, and source
-2. create and save named JavaScript tool definitions
-3. list and load saved tools from a Durable Object registry
-4. seed the registry with a few sample tools inspired by `mutagent`
-5. clear or delete saved tools
-6. run a saved tool with JSON input inside a sandboxed Dynamic Worker
+## How it works
 
 Each saved tool stores:
 
@@ -52,66 +30,98 @@ Each saved tool stores:
 - `exampleInput`
 - `executeSource`
 
-`executeSource` must be a JavaScript **function expression** such as:
+`executeSource` is a JavaScript function expression. It receives:
+
+1. the input object
+2. an optional `tools` helper for calling other saved tools
+
+Example:
 
 ```js
-;async ({ text }, tools) => {
+async ({ n }, tools) => {
+    const fibonacci = await tools.callTool("nthFibonacci", { n })
+
     return {
-        text: text.toUpperCase(),
+        value: fibonacci.value * 2,
     }
 }
 ```
 
-The optional `tools` argument exposes:
-
-```js
-await tools.callTool("otherToolName", { ...input })
-```
-
-## Architecture
-
-### `src/index.ts`
-
-Contains both the main Worker and the Durable Object class:
-
-- `ToolRegistry` Durable Object
-    - persists tool definitions with Durable Object storage
-    - exposes RPC methods to list, get, save, delete, seed, and clear tools
-- main Worker routes
-    - `GET /api/tools`
-    - `POST /api/tools`
-    - `POST /api/tools/generate`
-    - `GET /api/tools/:name`
-    - `DELETE /api/tools/:name`
-    - `POST /api/tools/seed`
-    - `POST /api/tools/clear`
-    - `POST /api/run`
-
-### Dynamic Worker execution
-
-When you run a saved tool:
-
-1. the main Worker loads the saved tool definition from the Durable Object
-2. it builds a Dynamic Worker module around `executeSource`
-3. the tool may receive a narrow RPC capability for calling other saved tools
-4. the tool executes through RPC in a sandboxed isolate
-
-The sandbox is created with:
+Generated code runs inside a Dynamic Worker with:
 
 ```js
 globalOutbound: null
 ```
 
-so user-defined tool code cannot make outbound network requests.
+so sandboxed tool code cannot make arbitrary outbound network requests.
 
-## Cloudflare bindings
+## Tool-to-tool calls
 
-`wrangler.jsonc` now includes:
+Nested tool calls are handled by a host-provided `ToolExecutor` RPC entrypoint.
 
-- a `LOADER` Worker Loader binding for Dynamic Workers
-- an `AI` Workers AI binding for tool generation
-- a `TOOL_REGISTRY` Durable Object binding
-- a `v1` migration creating the SQLite-backed Durable Object class
+The sandbox does **not** get direct access to the registry or the broader Worker environment. Instead, it only gets this narrow capability:
+
+```js
+await tools.callTool(name, input)
+```
+
+Current safeguards:
+
+- recursive cycles are blocked
+- maximum tool-call depth is limited
+
+## Seeded examples
+
+The seeded tools include:
+
+- `randomWord`
+- `reverseText`
+- `sumNumbers`
+- `nthFibonacci`
+- `doubleNthFibonacci`
+
+`doubleNthFibonacci` demonstrates cross-tool execution by calling `nthFibonacci` from inside the sandbox.
+
+## API routes
+
+The Worker exposes:
+
+- `GET /api/tools`
+- `POST /api/tools`
+- `GET /api/tools/:name`
+- `DELETE /api/tools/:name`
+- `POST /api/tools/generate`
+- `POST /api/tools/seed`
+- `POST /api/tools/clear`
+- `POST /api/run`
+
+## Project structure
+
+### `src/index.ts`
+
+Main Worker entrypoint and RPC surface.
+
+Contains:
+
+- the HTTP API routes
+- `ToolExecutor`, which allows one generated tool to call another
+- the exported `ToolRegistry` Durable Object binding
+
+### `src/worker/registry.ts`
+
+Durable Object-backed storage for saved tools.
+
+### `src/worker/sandbox.ts`
+
+Builds the Dynamic Worker wrapper around `executeSource` and injects the optional tool-calling capability.
+
+### `src/worker/ai.ts`
+
+Builds prompts for Workers AI and normalizes generated tool definitions.
+
+### `src/client/*`
+
+Browser UI for creating, editing, running, and inspecting tools.
 
 ## Local development
 
@@ -121,25 +131,25 @@ Install dependencies:
 npm install
 ```
 
-Generate updated Worker types after binding changes:
+Generate Worker types after binding changes:
 
 ```bash
-npx wrangler types
+npm run types
 ```
 
-Run the Vite dev server with the Worker API and SPA together:
+Start local development:
 
 ```bash
 npm run dev
 ```
 
-Build the Worker bundle and React client:
+Build everything:
 
 ```bash
 npm run build
 ```
 
-Preview the production build locally:
+Preview production build locally:
 
 ```bash
 npm run preview
@@ -151,20 +161,9 @@ Deploy:
 npm run deploy
 ```
 
-## Limits to keep in mind
-
-From the current Cloudflare docs:
-
-- Workers memory per isolate: **128 MB**
-- Workers CPU time: **10 ms free**, **up to 5 minutes paid**
-- Durable Objects are single-threaded per object
-- SQLite-backed Durable Objects can store up to **10 GB per object** on paid plans
-- A single Durable Object has a soft limit of about **1,000 requests/sec**
-
-If you push this further, re-check the live docs before changing the design.
-
 ## Notes
 
-- `inputSchemaSource` is persisted as tool metadata, following the `mutagent` shape.
-- The actual executable part is `executeSource`, which runs inside the Dynamic Worker sandbox.
-- This is still a demo project, not a hardened multi-tenant production system.
+- This is a demo project for generated function execution, not a hardened multi-tenant platform.
+- Tool definitions are persisted in a Durable Object rather than an external database.
+- Workers AI is used to draft tools, but tools can also be written or edited manually.
+- If you change bindings in `wrangler.jsonc`, rerun `npm run types`.
