@@ -1,10 +1,11 @@
 import type { ToolDefinitionInput } from "./types"
 
-export const COMPATIBILITY_DATE = "2026-03-24"
+export const COMPATIBILITY_DATE = "2026-03-17"
 export const REGISTRY_OBJECT_NAME = "global"
 export const TOOL_KEY_PREFIX = "tool:"
 export const DEFAULT_EXAMPLE_INPUT = "{}"
 export const TOOL_GENERATOR_MODEL = "@cf/qwen/qwen2.5-coder-32b-instruct"
+export const MAX_TOOL_CALL_DEPTH = 8
 
 export const TOOL_GENERATION_SCHEMA = {
     type: "object",
@@ -31,7 +32,7 @@ export const TOOL_GENERATION_SCHEMA = {
         executeSource: {
             type: "string",
             description:
-                "An async JavaScript function expression that accepts one object argument and returns a plain JSON-serializable object, without backticks or Markdown code fences.",
+                "An async JavaScript function expression that accepts the main input object as its first argument, may optionally accept a second tools argument with callTool(name, input), and returns a plain JSON-serializable object, without backticks or Markdown code fences.",
         },
     },
     required: [
@@ -87,6 +88,60 @@ export const SEEDED_TOOLS: ToolDefinitionInput[] = [
         executeSource: `async ({ numbers }) => {
   return {
     total: numbers.reduce((sum, value) => sum + value, 0),
+  }
+}`,
+    },
+    {
+        name: "nthFibonacci",
+        description: "Return the nth Fibonacci number.",
+        inputSchemaSource: `z.object({
+  n: z.number().int().min(0).describe("Zero-based Fibonacci index"),
+})`,
+        exampleInput: `{
+  "n": 8
+}`,
+        executeSource: `async ({ n }) => {
+  if (!Number.isInteger(n) || n < 0) {
+    throw new Error("n must be a non-negative integer")
+  }
+
+  let previous = 0
+  let current = 1
+
+  for (let index = 0; index < n; index += 1) {
+    const next = previous + current
+    previous = current
+    current = next
+  }
+
+  return {
+    value: previous,
+  }
+}`,
+    },
+    {
+        name: "doubleNthFibonacci",
+        description: "Call nthFibonacci and return double its value.",
+        inputSchemaSource: `z.object({
+  n: z.number().int().min(0).describe("Zero-based Fibonacci index"),
+})`,
+        exampleInput: `{
+  "n": 8
+}`,
+        executeSource: `async ({ n }, tools) => {
+  const fibonacci = await tools.callTool("nthFibonacci", { n })
+
+  if (
+    !fibonacci ||
+    typeof fibonacci !== "object" ||
+    typeof fibonacci.value !== "number"
+  ) {
+    throw new Error("nthFibonacci returned an unexpected result")
+  }
+
+  return {
+    value: fibonacci.value * 2,
+    original: fibonacci.value,
   }
 }`,
     },

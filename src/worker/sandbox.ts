@@ -12,29 +12,31 @@ interface SandboxEntrypoint {
     run(input: unknown): Promise<unknown>
 }
 
+export interface ToolExecutorBinding {
+    callTool(name: string, input: unknown): Promise<unknown>
+}
+
+interface RunToolInSandboxOptions {
+    toolExecutor?: ToolExecutorBinding
+}
+
 export async function runToolInSandbox(
     env: Env,
     tool: ToolDefinition,
     input: unknown,
+    options: RunToolInSandboxOptions = {},
 ): Promise<{
     output: unknown
     durationMs: number
 }> {
     try {
-        const worker = env.LOADER.get(
-            `${tool.name}:${await hashText(tool.executeSource)}`,
-            () => ({
-                compatibilityDate: COMPATIBILITY_DATE,
-                mainModule: "index.js",
-                modules: {
-                    "index.js": buildSandboxModule(
-                        tool.name,
-                        tool.executeSource,
-                    ),
-                },
-                globalOutbound: null,
-            }),
-        )
+        const workerCode = buildWorkerCode(tool, options)
+        const worker = options.toolExecutor
+            ? env.LOADER.load(workerCode)
+            : env.LOADER.get(
+                  `${tool.name}:${await hashText(tool.executeSource)}`,
+                  async () => workerCode,
+              )
         const sandbox = worker.getEntrypoint(
             "ToolSandbox",
         ) as unknown as SandboxEntrypoint
@@ -56,6 +58,27 @@ export async function runToolInSandbox(
                 cause: serializeErrorDetails(error),
             },
         )
+    }
+}
+
+function buildWorkerCode(
+    tool: ToolDefinition,
+    options: RunToolInSandboxOptions,
+) {
+    return {
+        compatibilityDate: COMPATIBILITY_DATE,
+        mainModule: "index.js",
+        modules: {
+            "index.js": buildSandboxModule(tool.name, tool.executeSource),
+        },
+        ...(options.toolExecutor
+            ? {
+                  env: {
+                      TOOL_EXECUTOR: options.toolExecutor,
+                  },
+              }
+            : {}),
+        globalOutbound: null,
     }
 }
 
@@ -112,8 +135,25 @@ export class ToolSandbox extends WorkerEntrypoint {
 			throw new Error("executeSource must evaluate to a function expression.");
 		}
 
+		const tools = {
+			callTool: async (name, nextInput) => {
+				if (
+					!this.env.TOOL_EXECUTOR ||
+					typeof this.env.TOOL_EXECUTOR.callTool !== "function"
+				) {
+					throw new Error(
+						"Tool execution context does not allow calling other saved tools.",
+					);
+				}
+
+				return structuredClone(
+					await this.env.TOOL_EXECUTOR.callTool(name, nextInput),
+				);
+			},
+		};
+
 		try {
-			const output = await execute(input);
+			const output = await execute(input, tools);
 			return structuredClone(ensureNamedOutput(output));
 		} catch (error) {
 			throw new Error(

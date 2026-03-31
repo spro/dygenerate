@@ -55,11 +55,17 @@ Each saved tool stores:
 `executeSource` must be a JavaScript **function expression** such as:
 
 ```js
-;async ({ text }) => {
+;async ({ text }, tools) => {
     return {
         text: text.toUpperCase(),
     }
 }
+```
+
+The optional `tools` argument exposes:
+
+```js
+await tools.callTool("otherToolName", { ...input })
 ```
 
 ## Architecture
@@ -87,7 +93,7 @@ When you run a saved tool:
 
 1. the main Worker loads the saved tool definition from the Durable Object
 2. it builds a Dynamic Worker module around `executeSource`
-3. the module is cached by a hash of the source
+3. the tool may receive a narrow RPC capability for calling other saved tools
 4. the tool executes through RPC in a sandboxed isolate
 
 The sandbox is created with:

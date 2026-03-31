@@ -115,7 +115,7 @@ export const BLANK_TOOL: ToolDefinition = {
     exampleInput: `{
   "text": "hello world"
 }`,
-    executeSource: `async ({ text }) => {
+    executeSource: `async ({ text }, tools) => {
   return {
     text: text.toUpperCase(),
   }
