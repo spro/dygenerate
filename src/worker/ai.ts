@@ -414,6 +414,7 @@ function buildFeatureGenerationPrompt(draft: FeatureGenerationDraft): string {
     return [
         "Generate a feature definition for a live generated app runtime.",
         "Return fields that match the provided JSON schema.",
+        `Current date context: ${getCurrentDateContext()}`,
         "Requirements:",
         "- The feature must bundle data model, actions, views, and initial entity state.",
         "- Prefer practical CRUD-like actions and views that fit the described feature.",
@@ -429,8 +430,10 @@ function buildFeaturePatchPrompt(draft: FeaturePatchDraft): string {
     return [
         "Translate the user's follow-up prompt into JSON patches against the current feature state.",
         "Return fields that match the provided JSON schema.",
+        `Current date context: ${getCurrentDateContext()}`,
         "Requirements:",
         "- Only emit patches that are necessary to satisfy the prompt.",
+        "- Resolve relative date phrases like today, tomorrow, this week, or next Friday using the current date context above.",
         "- Use zero-based indexes in patch targets.",
         "- Prefer entity.updateField or entity.toggleField for targeted edits.",
         "- Use entity.add for adding a single record, entity.replaceAll for replacing the whole collection, and entity.remove for deletions.",
@@ -439,6 +442,16 @@ function buildFeaturePatchPrompt(draft: FeaturePatchDraft): string {
         `Current entities: ${JSON.stringify(draft.entities)}`,
         `User prompt: ${draft.prompt}`,
     ].join("\n")
+}
+
+function getCurrentDateContext(): string {
+    return new Date().toLocaleString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        timeZone: "UTC",
+    })
 }
 
 function buildToolNameRetryPrompt(
