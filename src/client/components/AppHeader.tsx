@@ -14,10 +14,7 @@ export function AppHeader() {
                     dygenerate
                 </h1>
                 <p className="mt-1 text-sm text-stone-500 sm:text-base">
-                    A feature-first generated app runtime where model, actions, views, and live state evolve together.
-                </p>
-                <p className="mt-2 text-sm text-stone-400">
-                    Start with a prompt like “create a todo app”, then keep steering the running state with follow-up prompts.
+                    Generate a feature, then refine it with prompts.
                 </p>
             </div>
         </header>

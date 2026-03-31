@@ -249,19 +249,136 @@ export function FeatureStudio() {
 
     return (
         <section className={panelSurfaceClass}>
-            <div className="border-b border-stone-300 p-4">
-                <h2 className="text-2xl font-semibold text-stone-900">
-                    Feature studio
-                </h2>
-                <p className="mt-1 max-w-4xl text-sm text-stone-500 sm:text-base">
-                    Generate a shared feature definition where data model, actions, and UI views are planned together, then keep steering the live app state with follow-up prompts backed by Zustand.
-                </p>
-            </div>
-
-            <div className="grid gap-4 p-4 2xl:grid-cols-[360px_minmax(0,1fr)_360px]">
-                <div className="grid gap-4">
+            <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <div className="grid min-w-0 gap-4">
                     <div className={contentCardClass}>
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <div className="text-sm font-medium text-stone-900">
+                                    Live app runtime
+                                </div>
+                                <div className="text-sm text-stone-500">
+                                    Trusted rendering of generated feature definitions.
+                                </div>
+                            </div>
+                            <div className="text-sm text-stone-500">
+                                {feature
+                                    ? `${entities.length} ${feature.collectionName}`
+                                    : "No feature yet"}
+                            </div>
+                        </div>
+
+                        {isHydratingRuntime ? (
+                            <div className="mt-4">
+                                <MessageCard message="Loading persisted feature runtime..." />
+                            </div>
+                        ) : !feature ? (
+                            <div className="mt-4">
+                                <MessageCard message="Generate a feature to see the live stateful preview here." />
+                            </div>
+                        ) : (
+                            <FeatureRuntimePreview
+                                feature={feature}
+                                entities={entities}
+                                newEntityDraft={newEntityDraft}
+                                onDraftChange={(field, value) =>
+                                    setNewEntityDraft((current) => ({
+                                        ...current,
+                                        [field]: value,
+                                    }))
+                                }
+                                onCreateEntity={() => void handleCreateEntity()}
+                                onToggleEntityField={(index, field) =>
+                                    void handleToggleEntityField(index, field)
+                                }
+                                onRemoveEntity={(index) =>
+                                    void handleRemoveEntity(index)
+                                }
+                                onUpdateEntityField={(index, field, value) =>
+                                    void handleUpdateEntityField(index, field, value)
+                                }
+                            />
+                        )}
+                    </div>
+
+                    <div className={contentCardClass}>
+                        <div className="text-sm font-medium text-stone-900">
+                            Feature definition
+                        </div>
+                        {!feature ? (
+                            <div className="mt-3">
+                                <MessageCard message="No generated feature definition yet." />
+                            </div>
+                        ) : (
+                            <>
+                                <div className="mt-2 text-sm text-stone-500">
+                                    {feature.description}
+                                </div>
+                                <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                                    <div>
+                                        <dt className="font-medium text-stone-900">
+                                            Entity
+                                        </dt>
+                                        <dd className="text-stone-600">
+                                            {feature.entityName}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="font-medium text-stone-900">
+                                            Collection
+                                        </dt>
+                                        <dd className="text-stone-600">
+                                            {feature.collectionName}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="font-medium text-stone-900">
+                                            Primary field
+                                        </dt>
+                                        <dd className="text-stone-600">
+                                            {feature.primaryField}
+                                        </dd>
+                                    </div>
+                                </dl>
+
+                                <div className="mt-4">
+                                    <div className="text-sm font-medium text-stone-900">
+                                        Fields
+                                    </div>
+                                    <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                        {sortedFields.map(([fieldName, field]) => (
+                                            <div
+                                                key={fieldName}
+                                                className="border border-stone-300 bg-stone-50 p-2 text-sm"
+                                            >
+                                                <div className="font-medium text-stone-900">
+                                                    {field.label} · {field.type}
+                                                </div>
+                                                <div className="text-stone-500">
+                                                    {field.description}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                <aside className="grid gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:self-start xl:overflow-y-auto">
+                    <div className={contentCardClass}>
+                        <div>
+                            <div className="text-sm font-medium text-stone-900">
+                                Chat
+                            </div>
+                            <div className="mt-1 text-sm text-stone-500">
+                                Kept visible on the right so you can keep prompting while inspecting the generated app.
+                            </div>
+                        </div>
+
                         <Field
+                            className="mt-4"
                             label="App prompt"
                             hint="Example: create a todo app"
                         >
@@ -350,149 +467,36 @@ export function FeatureStudio() {
                             <Panel panel={followUpPanel} />
                         </div>
                     ) : null}
-                </div>
 
-                <div className="grid gap-4">
-                    <div className={contentCardClass}>
-                        <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <div className="text-sm font-medium text-stone-900">
-                                    Live app runtime
-                                </div>
-                                <div className="text-sm text-stone-500">
-                                    Trusted rendering of generated feature definitions.
-                                </div>
-                            </div>
-                            <div className="text-sm text-stone-500">
-                                {feature
-                                    ? `${entities.length} ${feature.collectionName}`
-                                    : "No feature yet"}
-                            </div>
-                        </div>
-
-                        {isHydratingRuntime ? (
-                            <div className="mt-4">
-                                <MessageCard message="Loading persisted feature runtime..." />
-                            </div>
-                        ) : !feature ? (
-                            <div className="mt-4">
-                                <MessageCard message="Generate a feature to see the live stateful preview here." />
-                            </div>
-                        ) : (
-                            <FeatureRuntimePreview
-                                feature={feature}
-                                entities={entities}
-                                newEntityDraft={newEntityDraft}
-                                onDraftChange={(field, value) =>
-                                    setNewEntityDraft((current) => ({
-                                        ...current,
-                                        [field]: value,
-                                    }))
-                                }
-                                onCreateEntity={() => void handleCreateEntity()}
-                                onToggleEntityField={(index, field) =>
-                                    void handleToggleEntityField(index, field)
-                                }
-                                onRemoveEntity={(index) =>
-                                    void handleRemoveEntity(index)
-                                }
-                                onUpdateEntityField={(index, field, value) =>
-                                    void handleUpdateEntityField(index, field, value)
-                                }
-                            />
-                        )}
-                    </div>
-                </div>
-
-                <div className="grid gap-4">
                     <div className={contentCardClass}>
                         <div className="text-sm font-medium text-stone-900">
-                            Feature definition
+                            Prompt history
                         </div>
-                        {!feature ? (
-                            <div className="mt-3">
-                                <MessageCard message="No generated feature definition yet." />
-                            </div>
-                        ) : (
-                            <>
-                                <div className="mt-2 text-sm text-stone-500">
-                                    {feature.description}
-                                </div>
-                                <dl className="mt-3 grid gap-3 text-sm">
-                                    <div>
-                                        <dt className="font-medium text-stone-900">
-                                            Entity
-                                        </dt>
-                                        <dd className="text-stone-600">
-                                            {feature.entityName}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt className="font-medium text-stone-900">
-                                            Collection
-                                        </dt>
-                                        <dd className="text-stone-600">
-                                            {feature.collectionName}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt className="font-medium text-stone-900">
-                                            Primary field
-                                        </dt>
-                                        <dd className="text-stone-600">
-                                            {feature.primaryField}
-                                        </dd>
-                                    </div>
-                                </dl>
-
-                                <div className="mt-4">
-                                    <div className="text-sm font-medium text-stone-900">
-                                        Fields
-                                    </div>
-                                    <div className="mt-2 grid gap-2">
-                                        {sortedFields.map(([fieldName, field]) => (
-                                            <div
-                                                key={fieldName}
-                                                className="border border-stone-300 bg-stone-50 p-2 text-sm"
-                                            >
-                                                <div className="font-medium text-stone-900">
-                                                    {field.label} · {field.type}
-                                                </div>
-                                                <div className="text-stone-500">
-                                                    {field.description}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="mt-4">
-                                    <div className="text-sm font-medium text-stone-900">
-                                        Prompt history
-                                    </div>
-                                    <div className="mt-2 grid gap-2">
-                                        {promptHistory.length === 0 ? (
-                                            <MessageCard message="No follow-up prompts applied yet." />
-                                        ) : (
-                                            promptHistory.map((entry, index) => (
-                                                <StatusCard
-                                                    key={`${entry.at}-${index}`}
-                                                    tone="pass"
-                                                    label={entry.prompt}
-                                                    meta={formatDate(entry.at)}
-                                                    sections={[
-                                                        entry.summary,
-                                                        formatJson(entry.appliedPatches),
-                                                    ]}
-                                                />
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            </>
-                        )}
+                        <div className="mt-1 text-sm text-stone-500">
+                            Follow-up prompts stay visible here while you explore the runtime.
+                        </div>
+                        <div className="mt-3 grid gap-2">
+                            {!feature ? (
+                                <MessageCard message="Generate a feature to start the chat loop." />
+                            ) : promptHistory.length === 0 ? (
+                                <MessageCard message="No follow-up prompts applied yet." />
+                            ) : (
+                                promptHistory.map((entry, index) => (
+                                    <StatusCard
+                                        key={`${entry.at}-${index}`}
+                                        tone="pass"
+                                        label={entry.prompt}
+                                        meta={formatDate(entry.at)}
+                                        sections={[
+                                            entry.summary,
+                                            formatJson(entry.appliedPatches),
+                                        ]}
+                                    />
+                                ))
+                            )}
+                        </div>
                     </div>
-                </div>
+                </aside>
             </div>
         </section>
     )
