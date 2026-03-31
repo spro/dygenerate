@@ -1,14 +1,32 @@
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "leetcode-lite",
-	"main": "./src/index.js",
-	"compatibility_date": "2026-03-24",
-	"assets": {
-		"directory": "./public"
-	},
-	"worker_loaders": [
-		{
-			"binding": "LOADER"
-		}
-	],
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "dygenerate",
+    "main": "./src/index.ts",
+    "compatibility_date": "2026-03-24",
+    "assets": {
+        "not_found_handling": "single-page-application",
+        "run_worker_first": ["/api/*"],
+    },
+    "worker_loaders": [
+        {
+            "binding": "LOADER",
+        },
+    ],
+    "ai": {
+        "binding": "AI",
+    },
+    "durable_objects": {
+        "bindings": [
+            {
+                "name": "TOOL_REGISTRY",
+                "class_name": "ToolRegistry",
+            },
+        ],
+    },
+    "migrations": [
+        {
+            "tag": "v1",
+            "new_sqlite_classes": ["ToolRegistry"],
+        },
+    ],
 }

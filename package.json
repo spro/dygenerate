@@ -1,13 +1,33 @@
 {
-	"name": "leetcode-lite",
-	"version": "0.0.0",
-	"private": true,
-	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
-		"start": "wrangler dev"
-	},
-	"devDependencies": {
-		"wrangler": "^4.77.0"
-	}
+    "name": "dygenerate",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite dev",
+        "start": "vite dev",
+        "build": "vite build",
+        "preview": "vite preview",
+        "deploy": "vite build && wrangler deploy",
+        "types": "wrangler types",
+        "format": "prettier . --write",
+        "check": "npm run format && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.client.json --noEmit"
+    },
+    "dependencies": {
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
+        "tailwind-merge": "^3.5.0"
+    },
+    "devDependencies": {
+        "@cloudflare/vite-plugin": "^1.30.2",
+        "@tailwindcss/vite": "^4.2.2",
+        "@types/react": "^19.2.2",
+        "@types/react-dom": "^19.2.2",
+        "@vitejs/plugin-react": "^5.1.0",
+        "prettier": "^3.8.1",
+        "tailwindcss": "^4.2.2",
+        "typescript": "^6.0.2",
+        "vite": "^8.0.3",
+        "wrangler": "^4.77.0"
+    }
 }
