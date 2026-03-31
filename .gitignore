@@ -158,6 +158,12 @@ dist
 .yarn/install-state.gz
 .pnp.\*
 
+# local editor/project files
+
+.claude/
+.vscode/
+.DS_Store
+
 # wrangler project
 
 .dev.vars*
